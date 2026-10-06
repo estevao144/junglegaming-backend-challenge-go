@@ -1,4 +1,4 @@
-# Execução das Partes 1, 2 e 3
+# Execução das Partes 1, 2, 3 e 4A
 
 ## Pré-requisitos
 
@@ -8,6 +8,9 @@ O Dockerfile compila com Go 1.26.0; `go.mod` declara a mesma versão mínima.
 Os checks locais desta entrega foram executados com Go 1.27.1 no Windows.
 
 ## Ambiente completo
+
+Em checkout limpo, primeiro execute `docker compose up -d --wait postgres localstack`,
+configure DATABASE_URL e aplique `go run ./cmd/migrate up`. Em seguida:
 
 ```sh
 docker compose up --build
@@ -22,11 +25,12 @@ O script da imagem LocalStack cria automaticamente:
 - `wager-transactions.fifo`: visibility timeout de 30s, long polling de 20s,
   deduplicação explícita, redrive para DLQ após cinco recebimentos.
 - `wager-transactions-dlq.fifo`: destino das falhas de entrada.
-- `wager-events.fifo`: destino previsto para eventos de integração da outbox.
+- `wager-events.fifo`: destino dos eventos de integração da outbox.
 
-As filas ainda não são consumidas. MessageGroupId, MessageDeduplicationId,
-contratos de saída, retries e controle de acesso ao broker serão implementados
-com os workers. LocalStack usa credenciais fictícias, sem isolamento IAM demonstrado.
+As filas ainda não são consumidas. O publisher da Parte 4A envia snapshots para a
+fila de eventos com identidade estável e retries; veja [OUTBOX.md](OUTBOX.md) para
+variáveis, execução e testes PostgreSQL + LocalStack. LocalStack usa credenciais
+fictícias, sem isolamento IAM demonstrado.
 As filas são reprovisionadas ao iniciar o container; só PostgreSQL tem volume persistente.
 
 ```sh

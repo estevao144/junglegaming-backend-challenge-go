@@ -21,6 +21,9 @@ go run ./cmd/migrate up
 ```
 
 Versão inicial: `0001_financial.up.sql` / `0001_financial.down.sql`.
+Na Parte 4A, UP aplica também `0002_outbox_delivery`, sem alterar a 0001.
+DOWN reverte todas as versões em ordem inversa. O publisher exige migrations
+aplicadas antes de iniciar; veja [OUTBOX.md](OUTBOX.md).
 O comando registra versão e SHA-256 do arquivo UP em `schema_migrations`.
 Repetir UP é seguro; alterar uma migration já aplicada provoca erro de checksum.
 As mudanças são atômicas e um advisory lock coordena somente execução de migrations.
@@ -125,10 +128,11 @@ causação opcional, timestamp UTC, versão 1 e data tipado. Money é string dec
 OPENING não inclui providerId ou ID externo inaplicáveis. LOSS gera somente
 WagerTransactionProcessed. Rejeição não cria ledger ou WalletBalanceChanged.
 
-Eventos são serializados e inseridos na mesma pgx.Tx do saldo e ledger. Não existe
-publicação nesta etapa. A outbox possui attempts, next_attempt_at, published_at,
-locked_by/locked_until e índice de pendências para futuros publishers concorrentes.
-A política de aquisição, leases, backoff e entrega ainda não foi implementada.
+Eventos são serializados e inseridos na mesma pgx.Tx do saldo e ledger. A Parte 3
+não envia mensagens. A Parte 4A usa attempts, next_attempt_at, published_at e
+locked_by/locked_until no publisher separado, com claims concorrentes e retry.
+A migration 0002 adiciona ordem de envio e índice por carteira; detalhes e testes
+estão em [OUTBOX.md](OUTBOX.md).
 
 ## Testes reais
 

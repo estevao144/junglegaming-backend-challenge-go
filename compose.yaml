@@ -13,6 +13,12 @@ services:
       AWS_SECRET_ACCESS_KEY: test
       SQS_ENDPOINT: http://localstack:4566
       SQS_QUEUE_NAME: wager-transactions.fifo
+      SQS_EVENTS_QUEUE_NAME: ${SQS_EVENTS_QUEUE_NAME:-wager-events.fifo}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-10}
+      OUTBOX_POLL_INTERVAL: ${OUTBOX_POLL_INTERVAL:-1s}
+      OUTBOX_LEASE: ${OUTBOX_LEASE:-30s}
+      OUTBOX_RETRY_BASE: ${OUTBOX_RETRY_BASE:-1s}
+      OUTBOX_RETRY_MAX: ${OUTBOX_RETRY_MAX:-1m}
     depends_on:
       postgres:
         condition: service_healthy

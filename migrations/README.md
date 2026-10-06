@@ -4,6 +4,11 @@
 outbox_events, com constraints e triggers. O arquivo DOWN remove essas tabelas e
 seus dados. Não há inbox nesta etapa.
 
+`0002_outbox_delivery` acrescenta ordem de envio, carteira derivada do snapshot e
+índice de pendências por carteira. Reutiliza os campos de lease da 0001 intacta.
+UP aplica versões pendentes em ordem; DOWN reverte todas em ordem inversa,
+mantendo o contrato de remover o schema financeiro. Cada comando é atômico.
+
 Defina DATABASE_URL e execute `go run ./cmd/migrate up` ou, para remover o schema
 financeiro, `go run ./cmd/migrate down`. A aplicação não aplica migrations no startup.
 

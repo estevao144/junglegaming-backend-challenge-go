@@ -18,6 +18,14 @@ func TestLoad(t *testing.T) {
 		{name: "invalid queue", key: "SQS_QUEUE_NAME", value: "standard", wantError: "SQS_QUEUE_NAME"},
 		{name: "invalid endpoint", key: "SQS_ENDPOINT", value: "localhost:4566", wantError: "SQS_ENDPOINT"},
 		{name: "invalid level", key: "LOG_LEVEL", value: "TRACE", wantError: "LOG_LEVEL"},
+		{name: "invalid event queue", key: "SQS_EVENTS_QUEUE_NAME", value: "standard", wantError: "SQS_EVENTS_QUEUE_NAME"},
+		{name: "same event queue", key: "SQS_EVENTS_QUEUE_NAME", value: "wager-transactions.fifo", wantError: "SQS_EVENTS_QUEUE_NAME"},
+		{name: "zero batch", key: "OUTBOX_BATCH_SIZE", value: "0", wantError: "OUTBOX_BATCH_SIZE"},
+		{name: "large batch", key: "OUTBOX_BATCH_SIZE", value: "101", wantError: "OUTBOX_BATCH_SIZE"},
+		{name: "invalid poll", key: "OUTBOX_POLL_INTERVAL", value: "0s", wantError: "OUTBOX_POLL_INTERVAL"},
+		{name: "short lease", key: "OUTBOX_LEASE", value: "1s", wantError: "OUTBOX_LEASE"},
+		{name: "invalid retry", key: "OUTBOX_RETRY_BASE", value: "-1s", wantError: "OUTBOX_RETRY_BASE"},
+		{name: "retry cap", key: "OUTBOX_RETRY_MAX", value: "1ms", wantError: "OUTBOX_RETRY_MAX"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			values := map[string]string{"DATABASE_URL": "postgres://user:secret@localhost:5432/jungle"}

@@ -1,3 +1,3 @@
-// Package workers will contain the SQS consumer, outbox publisher and durable
-// reference retries. Workers must be managed through fx.Lifecycle.
+// Package workers publishes committed outbox events through an Fx-managed loop.
+// Input consumers and reference retries belong to later challenge parts.
 package workers

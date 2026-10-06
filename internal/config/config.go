@@ -16,13 +16,19 @@ import (
 var Module = fx.Module("config", fx.Provide(Load))
 
 type Config struct {
-	HTTPAddress       string
-	DatabaseURL       string
-	AWSRegion         string
-	SQSEndpoint       string
-	SQSQueueName      string
-	LogLevel          slog.Level
-	DependencyTimeout time.Duration
+	HTTPAddress        string
+	DatabaseURL        string
+	AWSRegion          string
+	SQSEndpoint        string
+	SQSQueueName       string
+	LogLevel           slog.Level
+	DependencyTimeout  time.Duration
+	SQSEventsQueueName string
+	OutboxBatchSize    int
+	OutboxPollInterval time.Duration
+	OutboxLease        time.Duration
+	OutboxRetryBase    time.Duration
+	OutboxRetryMax     time.Duration
 }
 
 // Load reads process environment. It deliberately does not load .env files.
@@ -38,11 +44,12 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		return fallback
 	}
 	c := Config{
-		HTTPAddress:  get("HTTP_ADDR", ":8080"),
-		DatabaseURL:  get("DATABASE_URL", ""),
-		AWSRegion:    get("AWS_REGION", "us-east-1"),
-		SQSEndpoint:  get("SQS_ENDPOINT", ""),
-		SQSQueueName: get("SQS_QUEUE_NAME", "wager-transactions.fifo"),
+		HTTPAddress:        get("HTTP_ADDR", ":8080"),
+		DatabaseURL:        get("DATABASE_URL", ""),
+		AWSRegion:          get("AWS_REGION", "us-east-1"),
+		SQSEndpoint:        get("SQS_ENDPOINT", ""),
+		SQSQueueName:       get("SQS_QUEUE_NAME", "wager-transactions.fifo"),
+		SQSEventsQueueName: get("SQS_EVENTS_QUEUE_NAME", "wager-events.fifo"),
 	}
 	_, port, err := net.SplitHostPort(c.HTTPAddress)
 	if err != nil {
@@ -74,6 +81,34 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	c.DependencyTimeout, err = time.ParseDuration(get("DEPENDENCY_TIMEOUT", "3s"))
 	if err != nil || c.DependencyTimeout <= 0 || c.DependencyTimeout > 10*time.Second {
 		return Config{}, fmt.Errorf("DEPENDENCY_TIMEOUT must be positive and at most 10s")
+	}
+	if !strings.HasSuffix(c.SQSEventsQueueName, ".fifo") || c.SQSEventsQueueName == c.SQSQueueName {
+		return Config{}, fmt.Errorf("SQS_EVENTS_QUEUE_NAME must name a separate FIFO queue")
+	}
+	c.OutboxBatchSize, err = strconv.Atoi(get("OUTBOX_BATCH_SIZE", "10"))
+	if err != nil || c.OutboxBatchSize < 1 || c.OutboxBatchSize > 100 {
+		return Config{}, fmt.Errorf("OUTBOX_BATCH_SIZE must be between 1 and 100")
+	}
+	for _, setting := range []struct {
+		name     string
+		fallback string
+		value    *time.Duration
+	}{
+		{"OUTBOX_POLL_INTERVAL", "1s", &c.OutboxPollInterval},
+		{"OUTBOX_LEASE", "30s", &c.OutboxLease},
+		{"OUTBOX_RETRY_BASE", "1s", &c.OutboxRetryBase},
+		{"OUTBOX_RETRY_MAX", "1m", &c.OutboxRetryMax},
+	} {
+		*setting.value, err = time.ParseDuration(get(setting.name, setting.fallback))
+		if err != nil || *setting.value <= 0 || *setting.value > 24*time.Hour {
+			return Config{}, fmt.Errorf("%s must be positive and at most 24h", setting.name)
+		}
+	}
+	if c.OutboxLease < 3*c.DependencyTimeout {
+		return Config{}, fmt.Errorf("OUTBOX_LEASE must be at least three times DEPENDENCY_TIMEOUT")
+	}
+	if c.OutboxRetryMax < c.OutboxRetryBase {
+		return Config{}, fmt.Errorf("OUTBOX_RETRY_MAX must be at least OUTBOX_RETRY_BASE")
 	}
 	return c, nil
 }

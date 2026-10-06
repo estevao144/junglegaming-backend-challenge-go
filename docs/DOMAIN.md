@@ -183,5 +183,7 @@ de UUID no domínio.
 - A Parte 3 adiciona três modelos de eventos, hash canônico, repositories e
   processamento síncrono de abertura/BET/WIN sem referência/LOSS. Veja
   [POSTGRES.md](POSTGRES.md) para a persistência dessas invariantes.
+- A Parte 4A publica os snapshots persistidos, sem dependências AWS no domínio;
+  veja [OUTBOX.md](OUTBOX.md).
 - Políticas de reversão combinada, unicidade de reversões, resolução/recuperação
-  de pendências, inbox e publicação de eventos ainda serão implementadas.
+  de pendências e inbox ainda serão implementadas.
