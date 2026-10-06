@@ -1,4 +1,4 @@
-# Execução da Parte 1
+# Execução das Partes 1 e 2
 
 ## Pré-requisitos
 
@@ -121,6 +121,15 @@ go build ./cmd/api
 
 Os testes padrão verificam validação de configuração, grafo Fx, HTTP,
 readiness e fechamento do listener e da goroutine do servidor.
+Também cobrem Money, Wallet, WagerTransaction e WalletLedgerEntry. Esses testes
+de domínio não precisam de containers nem de variáveis de ambiente.
+
+```sh
+go test ./internal/domain
+go test -cover ./internal/domain
+```
+
+Veja [DOMAIN.md](DOMAIN.md) para exemplos e decisões de modelagem.
 Checks substituídos nos testes unitários não substituem o teste com infraestrutura real.
 
 Para verificar startup, readiness e shutdown com PostgreSQL e SQS reais:

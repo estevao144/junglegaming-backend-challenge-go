@@ -1,7 +1,9 @@
-# Arquitetura — Parte 1
+# Arquitetura — Partes 1 e 2
 
-Esta entrega estrutura o serviço. Nenhuma garantia financeira do desafio é
-considerada implementada nesta etapa.
+Esta entrega estrutura o serviço e implementa as invariantes locais do núcleo
+financeiro. Atomicidade, idempotência persistente e garantias distribuídas ainda
+dependem das próximas etapas. Veja [docs/DOMAIN.md](docs/DOMAIN.md) para a API e
+as decisões da modelagem de domínio.
 
 ## Organização
 
@@ -14,13 +16,13 @@ considerada implementada nesta etapa.
 | `internal/platform/postgres` | Pool pgx e lifecycle |
 | `internal/platform/messaging` | Cliente AWS SDK v2 e checks SQS |
 | `internal/transport/http` | Servidor net/http e health checks |
-| `internal/domain` | Reservado a entidades e valores; sem dependências de infraestrutura |
+| `internal/domain` | Money, Wallet, WagerTransaction e WalletLedgerEntry; apenas biblioteca padrão |
 | `internal/application` | Reservado a casos de uso e ports compartilhados por HTTP/SQS |
 | `internal/workers` | Reservado a consumidor, publisher e retry de referências |
 | `migrations` | Reservado a schema e migrations versionadas |
 
 Fx faz a composição por construtores, `fx.Module`, `fx.Provide` e `fx.Invoke`.
-Nenhum service locator ou dependência de Fx será introduzido no domínio.
+O domínio não possui service locator nem dependência de Fx.
 Ainda não há repositórios ou casos de uso artificiais apenas para preencher o grafo.
 
 ## Inicialização e shutdown
@@ -53,9 +55,10 @@ Estas escolhas orientam a estrutura; sua implementação e comprovação ainda e
 
 - Persistência: pgx com SQL explícito. Casos de uso delimitarão uma única transação
   compartilhada por saldo, operação, ledger, inbox e outbox; repositórios não farão commits isolados.
-- Money: `int64` em unidades mínimas + moeda, persistido em `BIGINT`, com escala
-  externa fixa de duas casas. Limite previsto: 92.233.720.368.547.758,07 em módulo
-  positivo. Parsing e aritmética exigirão proteção de overflow; não usar floats.
+- Money já usa `int64` em centavos + moeda, com parsing canônico de duas casas,
+  validação e proteção de overflow. A persistência futura usará `BIGINT` + moeda,
+  sem conversão para ponto flutuante. BRL é a única moeda operacional suportada;
+  o tipo conserva currency e rejeita operações entre moedas incompatíveis.
 - Concorrência: lock PostgreSQL por carteira (`SELECT ... FOR UPDATE`), sem locks
   globais, com constraints para saldo não negativo, unicidade e integridade do ledger.
 - Idempotência: registros e resultados persistentes, unicidade por provedor/chave
@@ -77,7 +80,8 @@ Somente os health checks públicos estão registrados. Não há autenticação e
 na API porque ainda não existem endpoints de negócio. O provisionamento Keycloak
 prepara identidades locais, mas não comprova validação de tokens ou isolamento.
 
-Ainda faltam entidades financeiras, migrations e constraints, repositórios,
+As entidades financeiras e seus testes unitários estão implementados. Ainda
+faltam migrations e constraints, repositórios,
 casos de uso, rotas financeiras, autenticação/autorização, workers, métricas,
 correlation IDs, controles de broker e testes distribuídos e de recuperação.
 
