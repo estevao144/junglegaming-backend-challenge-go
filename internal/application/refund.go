@@ -9,10 +9,10 @@ import (
 	"jungle-gaming/internal/platform/postgres"
 )
 
-// prepareReversalReference validates reversals and the optional WIN reference
+// prepareFinancialReference validates reversals and the optional WIN reference
 // under the wallet lock. Missing references enter pending only on the original
 // request, never on retries of that same transaction.
-func prepareReversalReference(ctx context.Context, r *postgres.Repositories, transaction *domain.WagerTransaction, wallet domain.WalletState, at time.Time, enterPending bool) (string, domain.Direction, error) {
+func prepareFinancialReference(ctx context.Context, r *postgres.Repositories, transaction *domain.WagerTransaction, wallet domain.WalletState, at time.Time, enterPending bool) (string, domain.Direction, error) {
 	data := transaction.Snapshot().Data
 	reference, err := r.Transactions.Reference(ctx, data.ProviderID, data.ReferenceExternalTransactionID)
 	if errors.Is(err, postgres.ErrNotFound) {

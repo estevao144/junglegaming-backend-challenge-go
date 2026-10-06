@@ -57,6 +57,9 @@ A policy do serviço inclui GetQueueUrl/GetQueueAttributes nessa DLQ; não permi
 consumi-la/apagar suas mensagens. A limitação IAM local permanece em [AUTH.md](AUTH.md).
 
 Readiness cobre PostgreSQL e SQS conforme README, sem publicação/probes pesados.
+O scrape renderiza um snapshot limitado em memória e libera o mutex antes do I/O
+HTTP. Cliente lento não bloqueia contadores, conclusão financeira ou ack. O sampler
+aguarda sua goroutine após cancelamento, inclusive com prazo de Stop esgotado.
 Liveness é independente dessas dependências. Correlation ID não é idempotência;
 ausente no HTTP, é gerado, e está presente na resposta/logs/eventos.
 

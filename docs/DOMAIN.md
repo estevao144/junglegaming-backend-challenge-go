@@ -29,8 +29,8 @@ decimal, err := total.Decimal() // "25.00"
 - Entrada externa: `NewMoney` aceita somente formato canônico não negativo,
   com duas casas e sem zeros extras à esquerda: `0.00`, `0.01`, `25.00`.
   `25`, `25.0`, `025.00`, sinais, espaços, notação científica e vírgulas são rejeitados.
-  Não há arredondamento nem normalização. O hash futuro deve usar a representação
-  retornada por `Decimal`, mantendo a mesma política em HTTP e SQS.
+  Não há arredondamento nem normalização permissiva. O hash usa a representação
+  retornada por `Decimal`, com a mesma política em HTTP e SQS.
 - Moeda operacional: somente BRL, código ISO 4217, com escala fixa de duas casas.
   Todos os construtores rejeitam outras moedas, inclusive USD. O tipo mantém
   `currency`, e soma, subtração e comparação rejeitam moedas incompatíveis.
@@ -44,7 +44,7 @@ decimal, err := total.Decimal() // "25.00"
   retorna erro; sua serialização decimal é válida.
 - `Compare` retorna -1, 0 ou 1; soma, subtração e comparação exigem mesma moeda.
 - `MarshalJSON` produz `{"amount":"25.00","currency":"BRL"}`. Não há unmarshaler:
-  os adaptadores futuros devem ler strings e chamar o construtor validado.
+  os adaptadores leem strings e chamam o construtor validado.
 - O zero value `Money{}` é inválido, pois não possui moeda. Use `ZeroMoney`.
 
 ## Wallet
@@ -61,14 +61,14 @@ zero e valores negativos retornam `ErrInvalidMoney`, sem alterar saldo, versão 
 LOSS não chama `Credit` ou `Debit`: registra somente o resultado da transação,
 preservando o saldo, a versão e os timestamps da carteira.
 
-`WalletState` e `Snapshot()` são cópias para leitura e futura persistência.
+`WalletState` e `Snapshot()` são cópias para leitura e persistência.
 Alterar o snapshot não altera a entidade. Versões são `int64`, positivas e com
 overflow protegido, para mapeamento direto ao `BIGINT` do PostgreSQL.
 O timestamp de uma mudança não pode preceder o último estado; igualdade é aceita.
 
 Uma Wallet é mutável e deve pertencer ao processamento de uma única operação.
 Não é um objeto compartilhado protegido por mutex. O controle entre processos
-continuará sendo responsabilidade do banco e da transação SQL.
+é responsabilidade do banco e da transação SQL.
 
 ## WagerTransaction
 
@@ -76,8 +76,8 @@ continuará sendo responsabilidade do banco e da transação SQL.
 status, referência interna, código de falha, resultado e timestamps.
 `NewWagerTransaction(data, at)` aceita somente os cinco tipos externos, valida
 metadados e cria `PENDING`. A chave recebida é preservada, sem substituição.
-O hash é representado como string não vazia: seu cálculo e confronto ficam para
-a camada de aplicação, sem implementação de idempotência nesta etapa.
+O hash é representado como string não vazia: a aplicação calcula o SHA-256
+canônico e compara a identidade persistente no PostgreSQL.
 
 | Tipo | Valor | Movimento / referência |
 | --- | --- | --- |
@@ -95,8 +95,8 @@ valida a referência e deriva CREDIT para BET, DEBIT para WIN/REFUND.
 
 `NewOpeningTransaction` aceita identidade interna estável, carteira, jogador,
 Money positivo e horário, sem exigir nem aceitar metadados externos.
-Cria `PENDING`, conforme a regra geral de criação. O futuro caso de uso de abertura
-deve chamar `MarkProcessed` e confirmar OPENING, ledger e carteira no mesmo commit,
+Cria `PENDING`, conforme a regra geral de criação. O caso de uso de abertura
+chama `MarkProcessed` e confirma OPENING, ledger e carteira no mesmo commit,
 sem publicar ou confirmar uma abertura parcialmente processada.
 O resultado de OPENING processado deve ter o saldo inicial e versão 1.
 Saldo inicial zero não deve chamar esse construtor nem criar lançamento financeiro.
@@ -138,9 +138,9 @@ para impedir alteração da entidade por um ponteiro do chamador.
 
 `Reject` exige um código de negócio conhecido; `Fail` define automaticamente o
 código de infraestrutura permanente. Erros transitórios não chamam `Fail` nem
-mudam a entidade: a futura aplicação decide retry com contexto de infraestrutura.
-A classificação real, o TTL de referências e a aplicabilidade de cada rejeição
-a uma operação serão responsabilidade dos futuros casos de uso.
+mudam a entidade: a aplicação deixa a entrega para retry e a infraestrutura
+transacional desfaz suas escritas. Referências usam limite de tentativas com backoff
+persistente, sem TTL adicional, conforme [REFERENCE_RETRY.md](REFERENCE_RETRY.md).
 
 `RehydrateWagerTransaction` valida coerência do estado completo e restaura o
 snapshot sem aplicar dinheiro, transições ou eventos. Estados terminais não podem
@@ -159,7 +159,7 @@ DEBIT:  balanceAfter = balanceBefore - money
 
 Zero e `NoMovement` são rejeitados. LOSS e transações rejeitadas não devem levar
 à criação de ledger. Como o construtor recebe apenas transactionId, essa relação
-será imposta pela orquestração futura; não há lookup ou processamento embutido.
+é imposta pela aplicação e pelos triggers PostgreSQL; não há I/O no domínio.
 Reidratar um lançamento apenas valida a equação, sem alterar qualquer carteira.
 
 ## Erros e pontos para PostgreSQL

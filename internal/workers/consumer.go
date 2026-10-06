@@ -22,6 +22,7 @@ type OperationQueue interface {
 	Source() string
 	Receive(context.Context) ([]types.Message, error)
 	Delete(context.Context, types.Message) error
+	Release(context.Context, types.Message) error
 }
 
 type IncomingService interface {
@@ -114,13 +115,31 @@ func (c *OperationConsumer) runBatch(fetch, work context.Context) error {
 	if err != nil {
 		return err
 	}
-	for _, message := range messages {
+	for index, message := range messages {
 		if fetch.Err() != nil {
+			c.releaseMessages(messages[index:])
 			break
 		}
-		_ = c.Handle(work, message) // Isolated errors leave this message for redrive.
+		if err := c.Handle(work, message); err != nil && fetch.Err() != nil {
+			// A stopped consumer cannot retry this delivery. Commit ambiguity is
+			// safe: redelivery reuses the durable inbox and financial identity.
+			c.releaseMessages(messages[index:])
+			break
+		}
 	}
 	return nil
+}
+
+func (c *OperationConsumer) releaseMessages(messages []types.Message) {
+	// Cleanup must outlive the canceled work context, but stays bounded while
+	// SQS is still open. All messages share one cleanup budget.
+	ctx, cancel := context.WithTimeout(context.Background(), c.config.DependencyTimeout)
+	defer cancel()
+	for _, message := range messages {
+		if err := c.queue.Release(ctx, message); err != nil {
+			c.logger.Warn("SQS shutdown visibility release failed", "messageId", aws.ToString(message.MessageId))
+		}
+	}
 }
 
 // Resolve deliberately does not acknowledge: tests use this production path to

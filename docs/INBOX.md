@@ -30,7 +30,7 @@ já provisiona a entrada, `wager-transactions-dlq.fifo` e RedrivePolicy com
 }
 ```
 
-Suporta BET, WIN sem referência, LOSS (amount `"0.00"`), REFUND e ROLLBACK integrais.
+Suporta BET, WIN com referência opcional, LOSS (amount `"0.00"`), REFUND e ROLLBACK integrais.
 Reversões exigem `data.referenceExternalTransactionId`. Veja
 [REFERENCES.md](REFERENCES.md) e [REFERENCE_RETRY.md](REFERENCE_RETRY.md).
 Money exige string com
@@ -48,11 +48,13 @@ constraints PostgreSQL. Broker MessageId é usado nos logs; a identidade da inbo
 ## Atomicidade, idempotência e recuperação
 
 `OperationConsumer -> ParseOperation -> FinancialService.ProcessIncoming`.
-O mesmo `prepareOperation/processOperation` atende Process (entrada direta/futuro
-HTTP) e ProcessIncoming. O consumer não implementa regras financeiras.
+O mesmo `prepareOperation/processOperation` atende Process (HTTP) e ProcessIncoming
+(SQS). O consumer não implementa regras financeiras.
 
-A migration 0003 cria `inbox_messages`, com chave primária
-`(consumer_name, source, message_id)`. Source é QueueArn, estável entre host e
+A migration 0003 cria `inbox_messages`; a 0006 acrescenta UNIQUE
+`(consumer_name, message_id)`, exatamente a identidade exigida pelo enunciado.
+A chave primária original é preservada para compatibilidade, sem ampliar o escopo
+da identidade. Source é QueueArn, estável entre host e
 container; consumer_name deve permanecer igual entre réplicas/restarts. Campos:
 hash SHA-256 do corpo completo, correlação, timestamps, status, transaction_id e
 failure_code. FK vincula resolução financeira. Triggers proíbem alteração de
@@ -67,6 +69,11 @@ verifica o corpo completo em reentregas; o produtor deve reenviar o mesmo envelo
 Reutilizar messageId com corpo diferente não é replay: fica para redrive/DLQ,
 preservando o registro original. Mesmo negócio com dois messageIds cria duas
 resoluções de inbox e apenas uma movimentação financeira.
+
+Reutilizar consumer/messageId com outro source também é conflito de identidade,
+mesmo com conteúdo igual. O produtor deve manter identidade e origem estáveis;
+mudança de fila exige uma nova identidade de entrega, sem mudar a identidade
+financeira. Ambiguidades legadas entre sources impedem a migration 0006, com rollback.
 
 Uma única transação SQL insere inbox, executa financeiro, ledger e outbox e resolve
 inbox antes do COMMIT. Um savepoint permite desfazer alterações financeiras
@@ -108,7 +115,10 @@ Endpoint, região, credenciais e nome da fila usam as configurações AWS existe
 Fx valida infraestrutura/schema e inicia o consumer. Stop cancela ReceiveMessage
 e novas entradas, permite concluir trabalho atual dentro do prazo e depois cancela
 o trabalho restante. Aguarda goroutines antes de fechar SQS/PostgreSQL. Mensagens
-recebidas e ainda não iniciadas voltam após visibility. Logs incluem identidades,
+recebidas e ainda não iniciadas têm visibility liberada com ChangeMessageVisibility=0.
+Trabalho interrompido sem ack também é liberado; cleanup tem um único orçamento
+DEPENDENCY_TIMEOUT e acontece antes do fechamento do SQS. Se o broker não responder,
+o visibility timeout original continua garantindo reentrega. Logs incluem identidades,
 receive count, resultado e classificação, sem corpo financeiro ou credenciais.
 
 ## Execução e testes

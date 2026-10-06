@@ -15,9 +15,11 @@ import (
 const consumerBody = `{"messageId":"envelope","type":"WagerTransactionRequested","occurredAt":"2026-10-06T12:00:00Z","data":{"providerId":"provider","externalTransactionId":"external","idempotencyKey":"key","playerId":"player","walletId":"wallet","roundId":"round","gameId":"game","kind":"BET","money":{"amount":"25.00","currency":"BRL"}}}`
 
 type fakeOperationQueue struct {
-	deleted        int
-	receiveStarted chan struct{}
-	message        *types.Message
+	deleted          int
+	released         int
+	releaseDeadlines []time.Time
+	receiveStarted   chan struct{}
+	message          *types.Message
 }
 
 func (q *fakeOperationQueue) Source() string { return "source" }
@@ -34,6 +36,87 @@ func (q *fakeOperationQueue) Receive(ctx context.Context) ([]types.Message, erro
 	return nil, ctx.Err()
 }
 func (q *fakeOperationQueue) Delete(context.Context, types.Message) error { q.deleted++; return nil }
+func (q *fakeOperationQueue) Release(ctx context.Context, _ types.Message) error {
+	q.released++
+	deadline, _ := ctx.Deadline()
+	q.releaseDeadlines = append(q.releaseDeadlines, deadline)
+	return nil
+}
+
+func TestConsumerShutdownReleasesInterruptedMessage(t *testing.T) {
+	message := types.Message{Body: aws.String(consumerBody)}
+	q := &fakeOperationQueue{message: &message}
+	started := make(chan struct{})
+	service := incomingFunc(func(ctx context.Context, _ application.IncomingOperation) (application.IncomingResult, error) {
+		close(started)
+		<-ctx.Done()
+		return application.IncomingResult{}, ctx.Err()
+	})
+	consumer := NewOperationConsumer(q, service, consumerConfig(), quietLogger())
+	if err := consumer.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !errors.Is(consumer.Stop(ctx), context.Canceled) {
+		t.Fatal("shutdown ignored cancellation")
+	}
+	if q.deleted != 0 || q.released != 1 {
+		t.Fatalf("interrupted message deleted/released = %d/%d", q.deleted, q.released)
+	}
+	select {
+	case <-consumer.done:
+	default:
+		t.Fatal("consumer did not join")
+	}
+}
+
+type stoppedBatchQueue struct {
+	fakeOperationQueue
+	stop context.CancelFunc
+}
+
+func (q *stoppedBatchQueue) Receive(context.Context) ([]types.Message, error) {
+	q.stop()
+	return []types.Message{{Body: aws.String(consumerBody)}, {Body: aws.String(consumerBody)}}, nil
+}
+
+func TestConsumerShutdownReleasesUnstartedBatch(t *testing.T) {
+	fetch, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	q := &stoppedBatchQueue{stop: cancel}
+	consumer := NewOperationConsumer(q, nil, consumerConfig(), quietLogger())
+	if err := consumer.runBatch(fetch, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if q.deleted != 0 || q.released != 2 {
+		t.Fatalf("unstarted messages deleted/released = %d/%d", q.deleted, q.released)
+	}
+}
+
+func TestConsumerShutdownSharesCleanupBudget(t *testing.T) {
+	fetch, stopFetch := context.WithCancel(context.Background())
+	defer stopFetch()
+	work, stopWork := context.WithCancel(context.Background())
+	defer stopWork()
+	q := &stoppedBatchQueue{stop: func() {}}
+	service := incomingFunc(func(context.Context, application.IncomingOperation) (application.IncomingResult, error) {
+		stopFetch()
+		stopWork()
+		return application.IncomingResult{}, context.Canceled
+	})
+	consumer := NewOperationConsumer(q, service, consumerConfig(), quietLogger())
+	if err := consumer.runBatch(fetch, work); err != nil {
+		t.Fatal(err)
+	}
+	if q.deleted != 0 || q.released != 2 {
+		t.Fatal("interrupted batch was not released")
+	}
+	if !q.releaseDeadlines[0].Equal(q.releaseDeadlines[1]) {
+		t.Fatal("interrupted and unstarted messages used separate cleanup budgets")
+	}
+}
 
 type incomingFunc func(context.Context, application.IncomingOperation) (application.IncomingResult, error)
 

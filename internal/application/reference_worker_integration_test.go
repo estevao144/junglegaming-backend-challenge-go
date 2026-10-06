@@ -450,10 +450,17 @@ func TestReferenceMigrationBackfillDownUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
+	auditDown, err := os.ReadFile("../../migrations/0006_audit_hardening.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(f.ctx, string(auditDown)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := tx.Exec(f.ctx, string(down)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(f.ctx, `DELETE FROM schema_migrations WHERE version=5`); err != nil {
+	if _, err := tx.Exec(f.ctx, `DELETE FROM schema_migrations WHERE version IN (5,6)`); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(f.ctx); err != nil {

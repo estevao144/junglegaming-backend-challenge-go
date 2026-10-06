@@ -104,7 +104,7 @@ func NewWagerTransaction(data TransactionData, at time.Time) (*WagerTransaction,
 	return RehydrateWagerTransaction(WagerTransactionState{Data: data, Status: Pending, CreatedAt: at, UpdatedAt: at})
 }
 
-// NewOpeningTransaction creates the internal transaction as PENDING. The future
+// NewOpeningTransaction creates the internal transaction as PENDING. The
 // opening use case must mark it PROCESSED before committing the wallet and ledger.
 func NewOpeningTransaction(id, walletID, playerID string, money Money, at time.Time) (*WagerTransaction, error) {
 	return RehydrateWagerTransaction(WagerTransactionState{
@@ -311,7 +311,7 @@ func (t *WagerTransaction) RejectReference(code FailureCode, result FinancialRes
 }
 
 // Fail is for permanent failures only. Transient I/O errors leave state unchanged
-// and must be retried by the future application layer.
+// and must be retried by the application layer.
 func (t *WagerTransaction) Fail(at time.Time) error {
 	if t == nil {
 		return ErrInvalidTransaction

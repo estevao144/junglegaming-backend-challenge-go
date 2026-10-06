@@ -1,9 +1,7 @@
 package httptransport
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 
@@ -71,15 +69,8 @@ func (h *OperationHandler) Process(w http.ResponseWriter, r *http.Request) {
 		respond(w, 403, map[string]string{"error": "forbidden"})
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
 	var body operationRequest
-	if err := decoder.Decode(&body); err != nil {
-		respond(w, 400, map[string]string{"error": "invalid_input"})
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+	if err := decodeBody(w, r, &body); err != nil {
 		respond(w, 400, map[string]string{"error": "invalid_input"})
 		return
 	}

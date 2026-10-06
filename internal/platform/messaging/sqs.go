@@ -105,6 +105,13 @@ func (q *Queue) Delete(ctx context.Context, message types.Message) error {
 	return err
 }
 
+func (q *Queue) Release(ctx context.Context, message types.Message) error {
+	_, err := q.client.ChangeMessageVisibility(ctx, &sqs.ChangeMessageVisibilityInput{
+		QueueUrl: aws.String(q.url), ReceiptHandle: message.ReceiptHandle, VisibilityTimeout: 0,
+	})
+	return err
+}
+
 func (q *Queue) Check(ctx context.Context) error {
 	_, err := q.client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
 		QueueUrl: aws.String(q.url), AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},

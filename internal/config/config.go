@@ -54,6 +54,21 @@ func Load() (Config, error) {
 	return load(os.LookupEnv)
 }
 
+// LoadDatabaseURL keeps administrative migrations independent of API, broker
+// and IdP configuration. Runtime Load still validates every service setting.
+func LoadDatabaseURL() (string, error) {
+	value := os.Getenv("DATABASE_URL")
+	return value, validateDatabaseURL(value)
+}
+
+func validateDatabaseURL(value string) error {
+	u, err := url.Parse(value)
+	if err != nil || u == nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" || u.Path == "" || u.Path == "/" {
+		return fmt.Errorf("DATABASE_URL must be a PostgreSQL URL with host and database")
+	}
+	return nil
+}
+
 func load(lookup func(string) (string, bool)) (Config, error) {
 	get := func(key, fallback string) string {
 		if value, ok := lookup(key); ok {
@@ -77,9 +92,8 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil || p < 0 || p > 65535 {
 		return Config{}, fmt.Errorf("HTTP_ADDR port must be between 0 and 65535")
 	}
-	u, err := url.Parse(c.DatabaseURL)
-	if err != nil || u == nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" || u.Path == "" || u.Path == "/" {
-		return Config{}, fmt.Errorf("DATABASE_URL must be a PostgreSQL URL with host and database")
+	if err := validateDatabaseURL(c.DatabaseURL); err != nil {
+		return Config{}, err
 	}
 	if strings.TrimSpace(c.AWSRegion) == "" {
 		return Config{}, fmt.Errorf("AWS_REGION is required")

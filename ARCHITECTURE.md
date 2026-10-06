@@ -1,4 +1,4 @@
-# Arquitetura — Partes 1, 2, 3, 4A, 4B, 5A, 5B, 6A e 6B
+# Arquitetura
 
 Esta entrega estrutura o serviço e implementa as invariantes locais do núcleo
 financeiro. A Parte 3 implementa persistência financeira, processamento síncrono,
@@ -108,7 +108,7 @@ WIN credita e gera ledger. LOSS só registra transação e evento de processamen
 Abertura positiva registra OPENING, ledger e eventos mantendo versão 1; zero
 registra somente a carteira.
 
-Os três tipos concretos de eventos têm envelope versão 1 e payload tipado.
+Os quatro tipos concretos de eventos têm envelope versão 1 e payload tipado.
 Após serialização, o snapshot JSONB é inserido na mesma pgx.Tx das alterações.
 Outbox contém tentativas, disponibilidade, publicação e lease. A Parte 4A adiciona
 publisher Fx com claim curto `FOR UPDATE SKIP LOCKED`, token aleatório e expiração,
@@ -160,7 +160,7 @@ Referência ausente gera PENDING_REFERENCE durável, sem movimento. Replay não
 resolve a pendência; ReferenceWorker faz isso separadamente. Detalhes em
 [REFERENCES.md](docs/REFERENCES.md) e [REFERENCE_RETRY.md](docs/REFERENCE_RETRY.md).
 Permanece pendente comprovar enforcement IAM no broker local. Publisher, consumer e ReferenceWorker estão
-implementados e testados. Inbox usa chave consumer/QueueArn/messageId do envelope
+implementados e testados. Inbox usa UNIQUE consumer/messageId do envelope, com QueueArn auditado e validado
 e hash de corpo separado do hash financeiro. FinancialService compartilha seu
 fluxo interno entre Process e ProcessIncoming; savepoint permite registrar erro
 terminal sem deixar escritas parciais. Inbox e financeiro compartilham COMMIT;
@@ -175,9 +175,12 @@ Reconciliação usa REPEATABLE READ READ ONLY para wallet e ledger, com leitura 
 na ordem das versões financeiras: verifica a cadeia e reconstrói créditos menos débitos,
 incluindo OPENING. Não bloqueia escritores nem corrige divergências. Diferença e cadeia
 inconsistente são observáveis na resposta, log e métrica. Constraints de wallet/opening
-já satisfazem a etapa; nenhuma migration antiga foi alterada e não há nova migration.
+já satisfazem a etapa. A auditoria acrescenta a 0006, sem alterar migrations anteriores,
+para WIN referenciado e unicidade consumer/messageId da inbox.
 
-Metrics é uma instância por processo, composta por Fx, sem estado financeiro/global lock.
+Metrics é uma instância por processo, composta por Fx, sem estado financeiro.
+Seu mutex protege contadores e renderização limitada em memória; a resposta HTTP
+é enviada após liberá-lo, evitando bloqueio de operações/acks por clientes lentos.
 Contadores e histogramas usam inteiros, labels limitados, sem IDs; não há dependência nova.
 Um sampler cancelável coleta idade da outbox e estoque aproximado visível da DLQ a cada
 15 segundos; scrapes só leem memória. Falhas mantêm o valor anterior e expõem disponibilidade.
@@ -189,3 +192,24 @@ Contrato e semântica exata das métricas estão em [OBSERVABILITY.md](docs/OBSE
 As imagens Docker têm tags fixas; o ambiente local usa credenciais de exemplo.
 O volume PostgreSQL preserva dados; a infraestrutura Keycloak e as filas são
 recriadas pelo provisionamento local. Esse Compose é destinado ao desenvolvimento.
+
+## Hardening da auditoria
+
+A migration 0006 permite inbox durável de WIN PENDING_REFERENCE e valida no banco
+que WIN processada com referência aponta uma BET PROCESSED do mesmo provider,
+player, wallet, currency, round e ID externo. O payout não precisa igualar a BET.
+Inbox tem UNIQUE `(consumer_name,message_id)`; source diferente é conflito de
+identidade, mesmo com conteúdo equivalente. Duplicatas legadas impedem o upgrade
+atomicamente, para revisão humana dos registros; nenhum histórico é apagado.
+
+O CLI de migrations valida somente DATABASE_URL e não depende de IdP ou SQS;
+o loader da API mantém todas as validações de autenticação. O consumer interrompido
+libera visibility de entregas sem ack, com cleanup limitado e sem novos efeitos.
+Se essa chamada falhar, o broker ainda recupera a entrega pelo timeout original.
+O sampler de métricas cancela e observa sua goroutine antes de fechar dependências,
+inclusive quando o contexto de Stop já venceu.
+
+As alterações e evidências estão em [AUDIT.md](docs/AUDIT.md). O enunciado original
+foi preservado em [CHALLENGE.md](docs/CHALLENGE.md), separando requisitos do quick start.
+O requisito de políticas efetivamente aplicadas no broker permanece PARTIAL no
+ambiente local; OIDC do serviço não restringe produtores que tenham acesso ao SQS.

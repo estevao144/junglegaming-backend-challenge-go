@@ -3,6 +3,7 @@ package observability
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -101,7 +102,11 @@ func (m *Metrics) Outbox(oldest *time.Time, available bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if available {
-		m.oldest = oldest
+		m.oldest = nil
+		if oldest != nil {
+			value := *oldest
+			m.oldest = &value
+		}
 	}
 	m.outboxAvailable = available
 }
@@ -117,10 +122,19 @@ func (m *Metrics) DLQ(count int64, available bool) {
 // ServeHTTP performs no infrastructure I/O. Gauge availability and staleness
 // remain visible when a dependency fails instead of presenting a false zero.
 func (m *Metrics) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Render the bounded snapshot in memory. A slow HTTP client must never
+	// hold the mutex used by operations and acknowledgements.
+	var snapshot strings.Builder
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.writeSnapshot(&snapshot)
+	m.mu.Unlock()
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	_, _ = io.WriteString(w, snapshot.String())
+}
+
+// writeSnapshot is called only while mu is held, with an in-memory writer.
+func (m *Metrics) writeSnapshot(w io.Writer) {
 	families := []string{"jungle_operations_total", "jungle_replays_total", "jungle_worker_results_total", "jungle_retries_total", "jungle_concurrency_conflicts_total", "jungle_reconciliation_divergences_total", "jungle_http_requests_total"}
 	keys := make([]string, 0, len(m.counters))
 	for key := range m.counters {

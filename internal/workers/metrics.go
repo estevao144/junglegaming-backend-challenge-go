@@ -42,16 +42,21 @@ func RegisterMetrics(lc fx.Lifecycle, c config.Config, store *postgres.Store, qu
 			}
 		}()
 		return nil
-	}, OnStop: func(ctx context.Context) error {
-		sampler.cancel()
-		select {
-		case <-sampler.done:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}})
+	}, OnStop: sampler.Stop})
 	return sampler
+}
+
+func (s *MetricsSampler) Stop(ctx context.Context) error {
+	s.cancel()
+	select {
+	case <-s.done:
+		return nil
+	case <-ctx.Done():
+		// The adapters honor cancellation. Join their goroutine before Fx
+		// closes PostgreSQL/SQS, even when the shutdown deadline has expired.
+		<-s.done
+		return ctx.Err()
+	}
 }
 
 func (s *MetricsSampler) Sample(ctx context.Context) {

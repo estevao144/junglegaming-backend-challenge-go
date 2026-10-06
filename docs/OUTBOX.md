@@ -98,11 +98,16 @@ docker run --rm --network junglegaming-backend-challenge-go_default `
   -e TEST_DATABASE_URL='postgres://jungle:jungle-local@postgres:5432/jungle?sslmode=disable' `
   -e SQS_ENDPOINT=http://localstack:4566 -e TEST_SQS_ENDPOINT=http://localstack:4566 `
   -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test `
+  -e OIDC_ISSUER_URL=http://localhost:8081/realms/jungle `
+  -e OIDC_INTERNAL_URL=http://keycloak:8080 -e OIDC_AUDIENCE=jungle-api `
+  -e MESSAGING_CLIENT_ID=wagering-messaging `
+  -e MESSAGING_CLIENT_SECRET=wagering-messaging-local `
   golang:1.26.0-bookworm sh -c 'go test ./... && go test -race ./... && go vet ./... && go test -race -tags=integration -count=1 -v ./...'
 ```
 
 As integrações usam schemas e filas isolados, conexões reais e dois pools
-independentes. Cobrem snapshot, concorrência contando chamadas reais de envio
+independentes. Prepare também Keycloak e as variáveis de [AUTH.md](AUTH.md).
+Cobrem snapshot, concorrência contando chamadas reais de envio
 (não apenas mensagens após deduplicação), ausência de lock durante envio, retry,
 crash após SendMessage, lease expirado, dono antigo, SKIP LOCKED, upgrade da Parte 3
 e lifecycle Fx. Todos os testes financeiros anteriores continuam na mesma suíte.

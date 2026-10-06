@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	ErrUnsupportedOperation = errors.New("operation requires a later processing stage")
+	ErrUnsupportedOperation = errors.New("unsupported external transaction kind")
 	ErrWalletIdentity       = errors.New("wallet player or currency does not match operation")
 )
 
@@ -239,7 +239,7 @@ func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCo
 	var referenceID string
 	var direction domain.Direction
 	if c.ReferenceExternalTransactionID != "" {
-		referenceID, direction, err = prepareReversalReference(ctx, r, transaction, before, at, true)
+		referenceID, direction, err = prepareFinancialReference(ctx, r, transaction, before, at, true)
 		if err != nil {
 			return err
 		}

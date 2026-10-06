@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-var ErrInboxIdentity = errors.New("inbox message identity reused with different content")
+var ErrInboxIdentity = errors.New("inbox message identity reused with different source or content")
 
 type InboxRepository struct{ tx pgx.Tx }
 
@@ -38,11 +38,17 @@ func (r InboxRepository) Insert(ctx context.Context, record InboxRecord) (bool, 
 
 func (r InboxRepository) Get(ctx context.Context, consumer, source, message string) (InboxRecord, error) {
 	record := InboxRecord{ConsumerName: consumer, Source: source, MessageID: message}
-	err := r.tx.QueryRow(ctx, `SELECT payload_hash,correlation_id,status,COALESCE(transaction_id,''),
+	err := r.tx.QueryRow(ctx, `SELECT source,payload_hash,correlation_id,status,COALESCE(transaction_id,''),
 		COALESCE(failure_code,''),received_at,processed_at FROM inbox_messages
-		WHERE consumer_name=$1 AND source=$2 AND message_id=$3`, consumer, source, message).Scan(
-		&record.PayloadHash, &record.CorrelationID, &record.Status, &record.TransactionID, &record.FailureCode, &record.ReceivedAt, &record.ProcessedAt)
-	return record, classify(err)
+		WHERE consumer_name=$1 AND message_id=$2`, consumer, message).Scan(
+		&record.Source, &record.PayloadHash, &record.CorrelationID, &record.Status, &record.TransactionID, &record.FailureCode, &record.ReceivedAt, &record.ProcessedAt)
+	if err != nil {
+		return record, classify(err)
+	}
+	if record.Source != source {
+		return record, ErrInboxIdentity
+	}
+	return record, nil
 }
 
 func (r InboxRepository) Complete(ctx context.Context, record InboxRecord) error {

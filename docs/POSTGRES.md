@@ -112,7 +112,7 @@ Referência ausente é representada por string vazia. Usa-se o escaping padrão 
 `encoding/json`, sem espaços nem newline. Não se afirma conformidade com RFC 8785.
 O teste fixa os bytes canônicos esperados. Chave de idempotência, IDs internos,
 correlationId, causationId e timestamps de transporte não fazem parte do hash.
-Os futuros adaptadores HTTP/SQS devem chamar essa mesma função.
+Os adaptadores HTTP/SQS chamam essa mesma função.
 
 ## Schema e outbox
 
@@ -157,7 +157,8 @@ go vet ./...
 
 A suite cria um schema aleatório por teste, aplica as migrations e remove apenas
 esse schema no cleanup. Exige permissão CREATE SCHEMA na base de testes. Não usa
-mocks, não pula testes por falta de conexão e não precisa de SQS/Keycloak.
+mocks e não pula testes por falta de conexão. A suíte completa deste pacote inclui
+SQS/Keycloak reais; prepare todas as variáveis de [DEVELOPMENT.md](DEVELOPMENT.md).
 O teste de lifecycle de infraestrutura da Parte 1 permanece separado:
 `go test -tags=integration ./internal/app` exige PostgreSQL e SQS preparados.
 
@@ -177,6 +178,12 @@ docker run --rm --network junglegaming-backend-challenge-go_default `
   --mount type=volume,source=jungle-go-modcache,target=/go/pkg/mod `
   --mount type=volume,source=jungle-go-buildcache,target=/root/.cache/go-build `
   -w /src -e 'TEST_DATABASE_URL=postgres://jungle:jungle-local@postgres:5432/jungle?sslmode=disable' `
+  -e TEST_SQS_ENDPOINT=http://localstack:4566 `
+  -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test `
+  -e OIDC_ISSUER_URL=http://localhost:8081/realms/jungle `
+  -e OIDC_INTERNAL_URL=http://keycloak:8080 -e OIDC_AUDIENCE=jungle-api `
+  -e MESSAGING_CLIENT_ID=wagering-messaging `
+  -e MESSAGING_CLIENT_SECRET=wagering-messaging-local `
   golang:1.26.0-bookworm sh -c 'go test -race ./... && go test -race -tags=integration -count=1 ./internal/application && go vet ./...'
 ```
 

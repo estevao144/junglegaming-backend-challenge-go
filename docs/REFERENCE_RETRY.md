@@ -24,6 +24,10 @@ Saldo insuficiente no débito gera REVERSAL_INSUFFICIENT_BALANCE, distinto de
 INSUFFICIENT_BALANCE usado para BET. Referência existente não processada gera
 REFERENCE_NOT_PROCESSED; contexto/tipo/valor inválidos geram INVALID_REFERENCE.
 
+Referência existente com estado PENDING/PENDING_REFERENCE também é rejeitada
+com REFERENCE_NOT_PROCESSED nesta política. Não é tratada como ausente nem aguarda
+novo processamento dessa referência. Referências ausentes usam o retry durável.
+
 ## Persistência e coordenação
 
 `reference_retries` guarda transaction_id, attempts, next_attempt_at,

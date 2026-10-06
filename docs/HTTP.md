@@ -39,7 +39,7 @@ Saldo inicial zero cria somente a wallet, com versão 1. Saldo positivo cria wal
 na versão 1, OPENING PROCESSED, ledger CREDIT e os eventos WagerTransactionProcessed
 e WalletBalanceChanged no mesmo commit PostgreSQL. Uma falha em qualquer escrita
 reverte tudo. Unicidade `(player_id,currency)` e `one_opening_per_wallet` já existem
-nas migrations anteriores; nenhuma migration nova foi necessária. OPENING externo
+nas migrations anteriores. A 0006 da auditoria reforça WIN/inbox, sem alterar OPENING. OPENING externo
 é rejeitado tanto por HTTP quanto por SQS, sem movimentação financeira.
 
 ## Processamento e consultas

@@ -30,5 +30,15 @@ tentativas e leases são descartados; um novo UP reagenda pendings com attempts=
 Defina DATABASE_URL e execute `go run ./cmd/migrate up` ou, para remover o schema
 financeiro, `go run ./cmd/migrate down`. A aplicação não aplica migrations no startup.
 
+`0006_audit_hardening` reforça WIN referenciado com BET processada no mesmo contexto,
+permite sua inbox PENDING_REFERENCE e impõe UNIQUE `(consumer_name,message_id)`.
+Source continua auditado; não amplia a identidade exigida pelo enunciado.
+Migrations 0001–0005 permanecem intactas. Se existirem identidades duplicadas entre
+sources legados, UP falha e faz rollback; os registros precisam de revisão antes
+do upgrade. Não se apaga nem escolhe silenciosamente um vencedor no histórico.
+DOWN da 0006 restaura a função de resolução da 0005; o runner reverte todas as
+versões dentro da mesma transação. Testes validam UP/DOWN/UP em schema exclusivo.
+O CLI exige apenas DATABASE_URL, sem depender de credenciais OIDC/mensageria.
+
 O runner usa pgx, transação SQL, registro de versão e checksum e lock de migrations.
 Veja [docs/POSTGRES.md](../docs/POSTGRES.md) para comandos completos e testes reais.

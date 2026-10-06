@@ -100,6 +100,14 @@ As policies versionadas são para aplicar em AWS/ambiente com enforcement; não
 alegamos que o broker local restringe produtores por IAM. A autorização OIDC do
 consumer e a rejeição de providers fora da allowlist são testadas de verdade.
 
+O enunciado torna obrigatório o controle por políticas do broker. Portanto essa
+limitação mantém a entrega **NOT READY**, mesmo com todos os testes locais passando.
+Uma identidade OIDC válida do consumer não comprova a autorização de quem publicou
+uma mensagem usando um provider permitido. Falta testar uma identidade de produtor
+sem permissão recebendo AccessDenied, e o produtor autorizado sendo aceito, em
+ambiente que aplique IAM. A policy do consumer inclui ChangeMessageVisibility
+somente na fila de entrada para liberar trabalho no shutdown.
+
 ## Configuração e execução
 
 Obrigatórios: OIDC_ISSUER_URL, OIDC_AUDIENCE, MESSAGING_CLIENT_ID e

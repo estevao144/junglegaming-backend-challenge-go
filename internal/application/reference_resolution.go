@@ -69,7 +69,7 @@ func (s *FinancialService) ResolveReference(ctx context.Context, claim postgres.
 		if at.Before(state.UpdatedAt) {
 			at = state.UpdatedAt
 		}
-		referenceID, direction, err := prepareReversalReference(ctx, r, transaction, wallet.Snapshot(), at, false)
+		referenceID, direction, err := prepareFinancialReference(ctx, r, transaction, wallet.Snapshot(), at, false)
 		if errors.Is(err, postgres.ErrNotFound) {
 			if attempts >= policy.MaxAttempts-1 {
 				result := domain.FinancialResult{Balance: wallet.Snapshot().Balance, WalletVersion: wallet.Snapshot().Version}

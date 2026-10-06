@@ -22,13 +22,13 @@ func run() error {
 	if len(os.Args) != 2 || (os.Args[1] != "up" && os.Args[1] != "down") {
 		return fmt.Errorf("usage: migrate up|down")
 	}
-	c, err := config.Load()
+	databaseURL, err := config.LoadDatabaseURL()
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, c.DatabaseURL)
+	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("invalid PostgreSQL configuration")
 	}
