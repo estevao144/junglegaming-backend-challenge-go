@@ -13,6 +13,11 @@ mantendo o contrato de remover o schema financeiro. Cada comando é atômico.
 FK financeira, imutabilidade de resultado e validação de resolução no commit.
 As versões 0001/0002 não são alteradas. DOWN também remove inbox e seus dados.
 
+`0004_references` acrescenta rastreio para resolução futura, índice único por
+referência de REFUND processado, validação SQL do contexto/valor e inbox com
+resolução durável PENDING_REFERENCE. Versões 0001–0003 permanecem intactas.
+Consulte [REFERENCES.md](../docs/REFERENCES.md) para regras e testes da Parte 5A.
+
 Defina DATABASE_URL e execute `go run ./cmd/migrate up` ou, para remover o schema
 financeiro, `go run ./cmd/migrate down`. A aplicação não aplica migrations no startup.
 

@@ -75,6 +75,8 @@ type TransactionData struct {
 	Kind                           TransactionKind
 	Money                          Money
 	ReferenceExternalTransactionID string
+	CorrelationID                  string
+	CausationID                    string
 }
 
 // FinancialResult captures the original balance, not the current wallet balance.
@@ -136,6 +138,9 @@ func (t WagerTransaction) Snapshot() WagerTransactionState {
 }
 
 func validateTransactionData(data TransactionData) error {
+	if (data.CorrelationID != "" && !validID(data.CorrelationID)) || (data.CausationID != "" && !validID(data.CausationID)) {
+		return fmt.Errorf("%w: invalid trace identity", ErrInvalidTransaction)
+	}
 	if !validID(data.ID) || !validID(data.WalletID) || !validID(data.PlayerID) {
 		return fmt.Errorf("%w: missing identity", ErrInvalidTransaction)
 	}
@@ -289,6 +294,19 @@ func (t *WagerTransaction) Reject(code FailureCode, result *FinancialResult, at 
 	}
 	state := t.state
 	state.Status, state.FailureCode, state.Result = Rejected, code, result
+	return t.transition(state, at)
+}
+
+// RejectReference preserves the resolved internal identity for rejection audit.
+func (t *WagerTransaction) RejectReference(code FailureCode, result FinancialResult, referenceID string, at time.Time) error {
+	if t == nil {
+		return ErrInvalidTransaction
+	}
+	state := t.state
+	state.Status = Rejected
+	state.FailureCode = code
+	state.Result = &result
+	state.ReferenceTransactionID = referenceID
 	return t.transition(state, at)
 }
 

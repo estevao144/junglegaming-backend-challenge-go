@@ -25,7 +25,7 @@ válido; um dono antigo não consegue alterar o claim de outro processo.
 
 O corpo da mensagem é o JSONB persistido, sem reconstruir a carteira ou modificar
 o envelope. Valores monetários continuam strings; nenhum ponto flutuante é usado.
-`MessageGroupId` é SHA-256 hexadecimal de `data.walletId`, comum aos três tipos de
+`MessageGroupId` é SHA-256 hexadecimal de `data.walletId`, comum aos tipos de
 evento. `aggregateId` de eventos de transação identifica a transação, por isso não
 serve para agrupar todos os eventos da carteira. `MessageDeduplicationId` é SHA-256
 hexadecimal de `eventId`. Os hashes acomodam identificadores arbitrários no limite

@@ -52,10 +52,11 @@ adaptadores. Ainda não há endpoint HTTP financeiro. A API existente expõe hea
 - `OpenWallet(ctx, playerID, balance, correlationID)`: criação interna, versão 1.
   Zero cria somente a carteira; positivo cria também OPENING, crédito no ledger
   e dois eventos, sem elevar a versão a 2.
-- `Process(ctx, ProcessCommand)`: BET, WIN sem referência e LOSS.
+- `Process(ctx, ProcessCommand)`: BET, WIN sem referência, LOSS e REFUND integral.
   O command preserva a chave recebida, recebe Money validado e exige correlationId.
-  REFUND, ROLLBACK e qualquer referência externa retornam `ErrUnsupportedOperation`
-  antes de gravar dinheiro. Resolução e espera de referências pertencem à próxima etapa.
+  ROLLBACK e WIN com referência retornam `ErrUnsupportedOperation`.
+  REFUND resolve BET por provedor/ID externo ou persiste PENDING_REFERENCE,
+  sem resolução automática; detalhes em [REFERENCES.md](REFERENCES.md).
 - `Store.GetWallet`, `GetLedger`, `GetTransaction` e `GetExternalTransaction`
   consultam e reidratam os modelos. Consultas externas de transação filtram providerId.
   A consulta de ledger é interna e ainda não implementa o cursor opaco da API futura.

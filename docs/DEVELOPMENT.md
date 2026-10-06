@@ -1,4 +1,4 @@
-# Execução das Partes 1, 2, 3, 4A e 4B
+# Execução das Partes 1, 2, 3, 4A, 4B e 5A
 
 ## Pré-requisitos
 
@@ -8,6 +8,9 @@ O Dockerfile compila com Go 1.26.0; `go.mod` declara a mesma versão mínima.
 Os checks locais desta entrega foram executados com Go 1.27.1 no Windows.
 
 ## Ambiente completo
+
+A Parte 5A acrescenta a migration 0004 e REFUND no serviço/consumer;
+veja [REFERENCES.md](REFERENCES.md). Aplique UP antes de iniciar a API.
 
 Em checkout limpo, primeiro execute `docker compose up -d --wait postgres localstack`,
 configure DATABASE_URL e aplique `go run ./cmd/migrate up`. Em seguida:

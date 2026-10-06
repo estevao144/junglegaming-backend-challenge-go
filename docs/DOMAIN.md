@@ -185,6 +185,8 @@ de UUID no domínio.
   [POSTGRES.md](POSTGRES.md) para a persistência dessas invariantes.
 - A Parte 4A publica os snapshots persistidos, sem dependências AWS no domínio;
   veja [OUTBOX.md](OUTBOX.md).
-- Políticas de reversão combinada, unicidade de reversões, resolução/recuperação
-  de pendências ainda serão implementadas. A inbox da Parte 4B e a integração do
+- A Parte 5A implementa REFUND integral, validação de referência, proteção SQL
+  contra duplicata e evento de pendência; veja [REFERENCES.md](REFERENCES.md).
+- ROLLBACK e resolução automática de pendências ficam para a Parte 5B.
+  A inbox da Parte 4B e a integração do
   consumer são descritas em [INBOX.md](INBOX.md); o domínio não depende de SQS.

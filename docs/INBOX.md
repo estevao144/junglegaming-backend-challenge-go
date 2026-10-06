@@ -26,7 +26,9 @@ já provisiona a entrada, `wager-transactions-dlq.fifo` e RedrivePolicy com
 }
 ```
 
-Suporta BET, WIN sem referência e LOSS (amount `"0.00"`). Money exige string com
+Suporta BET, WIN sem referência, LOSS (amount `"0.00"`) e REFUND integral com
+`data.referenceExternalTransactionId` obrigatório. Veja [REFERENCES.md](REFERENCES.md).
+Money exige string com
 duas casas e BRL, sem ponto flutuante. Wallet deve existir. JSON, envelope, campos
 obrigatórios e tipos precisam ser válidos; campos desconhecidos são recusados.
 `correlationId` é opcional e assume messageId quando ausente. `occurredAt` exige
@@ -49,8 +51,9 @@ A migration 0003 cria `inbox_messages`, com chave primária
 container; consumer_name deve permanecer igual entre réplicas/restarts. Campos:
 hash SHA-256 do corpo completo, correlação, timestamps, status, transaction_id e
 failure_code. FK vincula resolução financeira. Triggers proíbem alteração de
-identidade/resultado terminal e commit de inbox PENDING; uma resolução vinculada
-deve corresponder ao estado terminal da transação financeira.
+identidade/resultado e commit de inbox PENDING, e validam o vínculo financeiro.
+A resolução PENDING_REFERENCE conserva o snapshot da entrega, sem impedir a
+transição financeira futura descrita em [REFERENCES.md](REFERENCES.md).
 
 Inbox distingue entregas; a idempotência financeira distingue operações por
 provider/chave/ID externo e hash canônico. O hash financeiro original não muda
@@ -65,7 +68,9 @@ inbox antes do COMMIT. Um savepoint permite desfazer alterações financeiras
 parciais e persistir rejeição terminal; RELEASE SAVEPOINT não confirma a transação
 externa. Erros desconhecidos/infraestrutura e falhas no commit desfazem tudo.
 
-**DeleteMessage ocorre apenas após COMMIT** de PROCESSED ou REJECTED. BET sem saldo
+**DeleteMessage ocorre apenas após COMMIT** de PROCESSED, REJECTED ou
+PENDING_REFERENCE (resolução durável da entrega, aguardando o futuro worker).
+BET sem saldo
 mantém WagerTransactionRejected e seu evento, conforme Parte 3. Entrada sem modelo
 financeiro válido, conflito, operação não suportada ou overflow resolve inbox como
 REJECTED, sem criar uma transação financeira parcial ou inventar evento financeiro.

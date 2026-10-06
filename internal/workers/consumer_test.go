@@ -53,6 +53,7 @@ func TestConsumerAcknowledgementDecision(t *testing.T) {
 		{"success", consumerBody, "PROCESSED", nil, 1}, {"rejected", consumerBody, "REJECTED", nil, 1},
 		{"transient", consumerBody, "", errors.New("database unavailable"), 0}, {"poison", "{", "", nil, 0},
 		{"unresolved", consumerBody, "PENDING", nil, 0},
+		{"durable reference wait", consumerBody, "PENDING_REFERENCE", nil, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			q := &fakeOperationQueue{}

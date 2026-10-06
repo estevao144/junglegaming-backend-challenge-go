@@ -35,7 +35,7 @@ type Repositories struct {
 	Outbox       OutboxRepository
 }
 
-// WithTx owns BEGIN/COMMIT/ROLLBACK. All four repositories use this exact pgx.Tx.
+// WithTx owns BEGIN/COMMIT/ROLLBACK. All repositories use this exact pgx.Tx.
 func (s *Store) WithTx(ctx context.Context, work func(*Repositories) error) error {
 	tx, err := s.db.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
@@ -134,7 +134,7 @@ func (r WalletRepository) Update(ctx context.Context, wallet *domain.Wallet, pre
 const transactionColumns = `id, external_transaction_id, provider_id, idempotency_key, payload_hash,
 wallet_id, player_id, round_id, game_id, kind, amount_minor_units, currency,
 reference_external_transaction_id, reference_transaction_id, status, failure_code,
-result_balance_minor_units, result_wallet_version, created_at, updated_at`
+result_balance_minor_units, result_wallet_version, created_at, updated_at, correlation_id, causation_id`
 
 func optional(value string) any {
 	if value == "" {
@@ -149,8 +149,9 @@ func scanTransaction(row pgx.Row) (*domain.WagerTransaction, error) {
 	var amount int64
 	var currency string
 	var balance, version *int64
+	var correlation, causation *string
 	d := &s.Data
-	err := row.Scan(&d.ID, &external, &provider, &key, &hash, &d.WalletID, &d.PlayerID, &round, &game, &d.Kind, &amount, &currency, &reference, &internal, &s.Status, &failure, &balance, &version, &s.CreatedAt, &s.UpdatedAt)
+	err := row.Scan(&d.ID, &external, &provider, &key, &hash, &d.WalletID, &d.PlayerID, &round, &game, &d.Kind, &amount, &currency, &reference, &internal, &s.Status, &failure, &balance, &version, &s.CreatedAt, &s.UpdatedAt, &correlation, &causation)
 	if err != nil {
 		return nil, classify(err)
 	}
@@ -160,6 +161,7 @@ func scanTransaction(row pgx.Row) (*domain.WagerTransaction, error) {
 	}{
 		{external, &d.ExternalTransactionID}, {provider, &d.ProviderID}, {key, &d.IdempotencyKey}, {hash, &d.PayloadHash},
 		{round, &d.RoundID}, {game, &d.GameID}, {reference, &d.ReferenceExternalTransactionID}, {internal, &s.ReferenceTransactionID},
+		{correlation, &d.CorrelationID}, {causation, &d.CausationID},
 	} {
 		if pair.source != nil {
 			*pair.target = *pair.source
@@ -196,10 +198,10 @@ func (r TransactionRepository) Insert(ctx context.Context, transaction *domain.W
 		balance, version = s.Result.Balance.MinorUnits(), s.Result.WalletVersion
 	}
 	result, err := r.tx.Exec(ctx, `INSERT INTO wager_transactions (`+transactionColumns+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 		ON CONFLICT DO NOTHING`, d.ID, optional(d.ExternalTransactionID), optional(d.ProviderID), optional(d.IdempotencyKey), optional(d.PayloadHash),
 		d.WalletID, d.PlayerID, optional(d.RoundID), optional(d.GameID), d.Kind, d.Money.MinorUnits(), d.Money.Currency(),
-		optional(d.ReferenceExternalTransactionID), optional(s.ReferenceTransactionID), s.Status, optional(string(s.FailureCode)), balance, version, s.CreatedAt, s.UpdatedAt)
+		optional(d.ReferenceExternalTransactionID), optional(s.ReferenceTransactionID), s.Status, optional(string(s.FailureCode)), balance, version, s.CreatedAt, s.UpdatedAt, optional(d.CorrelationID), optional(d.CausationID))
 	if err != nil {
 		return false, err
 	}

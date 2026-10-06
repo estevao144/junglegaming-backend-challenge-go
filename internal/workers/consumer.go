@@ -148,7 +148,7 @@ func (c *OperationConsumer) Handle(ctx context.Context, message types.Message) e
 		c.logger.Warn("SQS operation left for redelivery", attributes...)
 		return err
 	}
-	if result.Status != "PROCESSED" && result.Status != "REJECTED" {
+	if result.Status != "PROCESSED" && result.Status != "REJECTED" && result.Status != "PENDING_REFERENCE" {
 		return errors.New("incoming operation did not return a terminal resolution")
 	}
 	attributes = append(attributes, "transactionId", result.TransactionID, "result", result.Status, "failureCode", result.FailureCode, "inboxReplay", result.InboxReplay, "financialReplay", result.FinancialReplay)

@@ -162,10 +162,10 @@ func (s *FinancialService) Process(ctx context.Context, c ProcessCommand) (Proce
 }
 
 func prepareOperation(c ProcessCommand) (*domain.WagerTransaction, string, error) {
-	if c.Kind != domain.Bet && c.Kind != domain.Win && c.Kind != domain.Loss {
+	if c.Kind != domain.Bet && c.Kind != domain.Win && c.Kind != domain.Loss && c.Kind != domain.Refund {
 		return nil, "", ErrUnsupportedOperation
 	}
-	if c.ReferenceExternalTransactionID != "" {
+	if c.ReferenceExternalTransactionID != "" && c.Kind != domain.Refund {
 		return nil, "", ErrUnsupportedOperation
 	}
 	if !eventIdentity(c.CorrelationID, c.CausationID) {
@@ -183,6 +183,7 @@ func prepareOperation(c ProcessCommand) (*domain.WagerTransaction, string, error
 	transaction, err := domain.NewWagerTransaction(domain.TransactionData{
 		ID: id, ProviderID: c.ProviderID, ExternalTransactionID: c.ExternalTransactionID, IdempotencyKey: c.IdempotencyKey, PayloadHash: hash,
 		WalletID: c.WalletID, PlayerID: c.PlayerID, RoundID: c.RoundID, GameID: c.GameID, Kind: c.Kind, Money: c.Money,
+		ReferenceExternalTransactionID: c.ReferenceExternalTransactionID, CorrelationID: c.CorrelationID, CausationID: c.CausationID,
 	}, at)
 	if err != nil {
 		return nil, "", err
@@ -228,10 +229,21 @@ func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCo
 	if at.Before(before.UpdatedAt) {
 		at = before.UpdatedAt
 	}
+	var referenceID string
+	if c.Kind == domain.Refund {
+		referenceID, err = prepareRefundReference(ctx, r, transaction, before, at)
+		if err != nil {
+			return err
+		}
+		if transaction.Snapshot().Status != domain.Pending {
+			outcome.Transaction = transaction.Snapshot()
+			return nil
+		}
+	}
 	switch c.Kind {
 	case domain.Bet:
 		err = wallet.Debit(c.Money, at)
-	case domain.Win:
+	case domain.Win, domain.Refund:
 		err = wallet.Credit(c.Money, at)
 	case domain.Loss: // Never call financial wallet methods for LOSS.
 	}
@@ -253,7 +265,7 @@ func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCo
 		return err
 	}
 	after := wallet.Snapshot()
-	if err := transaction.MarkProcessed(domain.FinancialResult{Balance: after.Balance, WalletVersion: after.Version}, "", at); err != nil {
+	if err := transaction.MarkProcessed(domain.FinancialResult{Balance: after.Balance, WalletVersion: after.Version}, referenceID, at); err != nil {
 		return err
 	}
 	if err := r.Transactions.Complete(ctx, transaction); err != nil {
@@ -289,7 +301,7 @@ func replay(existing *domain.WagerTransaction, c ProcessCommand, hash string, ou
 	if state.Data.IdempotencyKey != c.IdempotencyKey || state.Data.ExternalTransactionID != c.ExternalTransactionID || state.Data.PayloadHash != hash {
 		return postgres.ErrConflict
 	}
-	if !state.Status.Terminal() {
+	if !state.Status.Terminal() && state.Status != domain.PendingReference {
 		return fmt.Errorf("persisted operation is pending; recovery is not implemented")
 	}
 	*outcome = ProcessResult{Transaction: state, IdempotentReplay: true}

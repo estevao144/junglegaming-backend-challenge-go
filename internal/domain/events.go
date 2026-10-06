@@ -16,15 +16,17 @@ type EventHeader struct {
 }
 
 type WagerTransactionProcessedData struct {
-	TransactionID         string          `json:"transactionId"`
-	WalletID              string          `json:"walletId"`
-	PlayerID              string          `json:"playerId"`
-	ProviderID            string          `json:"providerId,omitempty"`
-	ExternalTransactionID string          `json:"externalTransactionId,omitempty"`
-	Kind                  TransactionKind `json:"kind"`
-	Money                 Money           `json:"money"`
-	Balance               Money           `json:"balance"`
-	WalletVersion         int64           `json:"walletVersion"`
+	ReferenceExternalTransactionID string          `json:"referenceExternalTransactionId,omitempty"`
+	ReferenceTransactionID         string          `json:"referenceTransactionId,omitempty"`
+	TransactionID                  string          `json:"transactionId"`
+	WalletID                       string          `json:"walletId"`
+	PlayerID                       string          `json:"playerId"`
+	ProviderID                     string          `json:"providerId,omitempty"`
+	ExternalTransactionID          string          `json:"externalTransactionId,omitempty"`
+	Kind                           TransactionKind `json:"kind"`
+	Money                          Money           `json:"money"`
+	Balance                        Money           `json:"balance"`
+	WalletVersion                  int64           `json:"walletVersion"`
 }
 
 type WagerTransactionProcessedEvent struct {
@@ -33,13 +35,15 @@ type WagerTransactionProcessedEvent struct {
 }
 
 type WagerTransactionRejectedData struct {
-	TransactionID         string      `json:"transactionId"`
-	WalletID              string      `json:"walletId"`
-	ProviderID            string      `json:"providerId"`
-	ExternalTransactionID string      `json:"externalTransactionId"`
-	FailureCode           FailureCode `json:"failureCode"`
-	Balance               Money       `json:"balance"`
-	WalletVersion         int64       `json:"walletVersion"`
+	ReferenceExternalTransactionID string      `json:"referenceExternalTransactionId,omitempty"`
+	ReferenceTransactionID         string      `json:"referenceTransactionId,omitempty"`
+	TransactionID                  string      `json:"transactionId"`
+	WalletID                       string      `json:"walletId"`
+	ProviderID                     string      `json:"providerId"`
+	ExternalTransactionID          string      `json:"externalTransactionId"`
+	FailureCode                    FailureCode `json:"failureCode"`
+	Balance                        Money       `json:"balance"`
+	WalletVersion                  int64       `json:"walletVersion"`
 }
 
 type WagerTransactionRejectedEvent struct {
@@ -85,6 +89,7 @@ func NewWagerTransactionProcessedEvent(id, correlation, causation string, tx *Wa
 		return WagerTransactionProcessedEvent{}, err
 	}
 	return WagerTransactionProcessedEvent{EventHeader: h, Data: WagerTransactionProcessedData{
+		ReferenceExternalTransactionID: s.Data.ReferenceExternalTransactionID, ReferenceTransactionID: s.ReferenceTransactionID,
 		TransactionID: s.Data.ID, WalletID: s.Data.WalletID, PlayerID: s.Data.PlayerID, ProviderID: s.Data.ProviderID,
 		ExternalTransactionID: s.Data.ExternalTransactionID, Kind: s.Data.Kind, Money: s.Data.Money, Balance: s.Result.Balance, WalletVersion: s.Result.WalletVersion}}, nil
 }
@@ -105,6 +110,7 @@ func NewWagerTransactionRejectedEvent(id, correlation, causation string, tx *Wag
 		return WagerTransactionRejectedEvent{}, err
 	}
 	return WagerTransactionRejectedEvent{EventHeader: h, Data: WagerTransactionRejectedData{TransactionID: s.Data.ID, WalletID: s.Data.WalletID, ProviderID: s.Data.ProviderID,
+		ReferenceExternalTransactionID: s.Data.ReferenceExternalTransactionID, ReferenceTransactionID: s.ReferenceTransactionID,
 		ExternalTransactionID: s.Data.ExternalTransactionID, FailureCode: s.FailureCode, Balance: s.Result.Balance, WalletVersion: s.Result.WalletVersion}}, nil
 }
 
