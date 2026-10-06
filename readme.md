@@ -1,14 +1,16 @@
-# Jungle Gaming — Partes 1 e 2
+# Jungle Gaming — Partes 1, 2 e 3
 
 Base Go + Uber Fx para o desafio abaixo. Esta etapa inclui configuração validada,
 logs JSON, lifecycle do servidor HTTP e PostgreSQL, cliente SQS e health checks.
 A Parte 2 implementa o núcleo de domínio: Money, Wallet, WagerTransaction e
-WalletLedgerEntry, com testes unitários. Casos de uso, endpoints de negócio,
-persistência financeira e workers serão implementados nas próximas etapas.
+WalletLedgerEntry, com testes unitários. A Parte 3 adiciona PostgreSQL, migrations,
+repositories e os casos de uso transacionais de abertura, BET, WIN sem referência
+e LOSS, com idempotência e outbox. Endpoints de negócio e workers ficam para as próximas etapas.
 
 - [Execução local, variáveis e testes](docs/DEVELOPMENT.md)
 - [Decisões e trabalho pendente](ARCHITECTURE.md)
 - [Domínio financeiro: API, invariantes e decisões](docs/DOMAIN.md)
+- [PostgreSQL, migrations e testes reais da Parte 3](docs/POSTGRES.md)
 
 Início rápido: `docker compose up --build`. Verifique `GET /health/live` e
 `GET /health/ready` em `http://localhost:8080`.

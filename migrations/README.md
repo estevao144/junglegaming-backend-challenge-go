@@ -1,7 +1,11 @@
 # Migrations
 
-Ainda não há schema financeiro na Parte 1. As migrations serão adicionadas junto
-com os modelos e invariantes do banco, com pares `NNNN_nome.up.sql` e
-`NNNN_nome.down.sql`, além dos comandos de aplicação e reversão.
+`0001_financial.up.sql` cria wallets, wager_transactions, wallet_ledger_entries e
+outbox_events, com constraints e triggers. O arquivo DOWN remove essas tabelas e
+seus dados. Não há inbox nesta etapa.
 
-A aplicação não cria nem altera tabelas automaticamente.
+Defina DATABASE_URL e execute `go run ./cmd/migrate up` ou, para remover o schema
+financeiro, `go run ./cmd/migrate down`. A aplicação não aplica migrations no startup.
+
+O runner usa pgx, transação SQL, registro de versão e checksum e lock de migrations.
+Veja [docs/POSTGRES.md](../docs/POSTGRES.md) para comandos completos e testes reais.

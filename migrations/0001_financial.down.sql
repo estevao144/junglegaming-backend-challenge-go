@@ -1,0 +1,10 @@
+DROP TABLE outbox_events;
+DROP FUNCTION protect_outbox_snapshot();
+DROP TABLE wallet_ledger_entries;
+DROP FUNCTION protect_ledger();
+DROP FUNCTION validate_ledger_transaction();
+DROP TABLE wager_transactions;
+DROP FUNCTION protect_wager_transaction();
+DROP FUNCTION validate_processed_ledger();
+DROP TABLE wallets;
+DROP FUNCTION validate_wallet_movement();

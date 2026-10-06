@@ -42,3 +42,6 @@ func New(lc fx.Lifecycle, c config.Config) (*Database, error) {
 }
 
 func (d *Database) Check(ctx context.Context) error { return d.pool.Ping(ctx) }
+
+// Pool is available after the Fx startup hook. Its lifecycle remains owned by Database.
+func (d *Database) Pool() *pgxpool.Pool { return d.pool }

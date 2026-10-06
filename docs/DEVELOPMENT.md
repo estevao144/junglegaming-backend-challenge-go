@@ -1,4 +1,4 @@
-# Execução das Partes 1 e 2
+# Execução das Partes 1, 2 e 3
 
 ## Pré-requisitos
 
@@ -142,8 +142,12 @@ O teste de integração atual não testa OIDC, persistência financeira ou consu
 de mensagens. Testes com três processos, interrupções, idempotência, autenticação
 e concorrência financeira serão adicionados nas respectivas etapas.
 
-## Migrations
+## Migrations e testes financeiros
 
-Não existem migrations aplicáveis ou reversíveis nesta etapa. O diretório
-`migrations/` está reservado; os comandos de aplicação e reversão serão incluídos
-com o schema financeiro. Veja [migrations/README.md](../migrations/README.md).
+Com DATABASE_URL definido, execute `go run ./cmd/migrate up`. A reversão
+`go run ./cmd/migrate down` remove as tabelas financeiras e seus dados.
+
+Para testes reais, prepare somente o PostgreSQL, defina TEST_DATABASE_URL e rode
+`go test -tags=integration ./internal/application`. Esses testes são independentes
+de SQS e Keycloak. Para testes com -race no container Go e detalhes do schema,
+consulte [POSTGRES.md](POSTGRES.md) e [migrations/README.md](../migrations/README.md).

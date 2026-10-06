@@ -1,3 +1,3 @@
-// Package application will contain use cases and persistence ports shared by
-// HTTP and SQS. SQL transaction boundaries will be defined here when implemented.
+// Package application contains transactional financial use cases shared by future
+// HTTP and SQS adapters. The domain remains independent of the PostgreSQL adapter.
 package application

@@ -180,5 +180,8 @@ de UUID no domínio.
 - Distinguir OPENING interno no schema e impedir crédito de abertura duplicado.
 - Persistir o resultado original para replay e pendências de referência de forma
   durável. Copiar snapshots não representa uma implementação de persistência.
-- Modelos de eventos, políticas de reversão combinada, unicidade de reversões,
-  concorrência, hash canônico, I/O e recuperação ainda serão implementados.
+- A Parte 3 adiciona três modelos de eventos, hash canônico, repositories e
+  processamento síncrono de abertura/BET/WIN sem referência/LOSS. Veja
+  [POSTGRES.md](POSTGRES.md) para a persistência dessas invariantes.
+- Políticas de reversão combinada, unicidade de reversões, resolução/recuperação
+  de pendências, inbox e publicação de eventos ainda serão implementadas.
