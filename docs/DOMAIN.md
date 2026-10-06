@@ -90,8 +90,8 @@ a camada de aplicação, sem implementação de idempotência nesta etapa.
 
 BET e LOSS não aceitam referências nesta interpretação, pois o enunciado só as
 define para WIN e reversões. Autorrefências externas ou internas são rejeitadas.
-`Movement()` retorna `ErrUnresolvedReference` para ROLLBACK: a resolução futura
-determinará a direção inversa, sem assumir que toda reversão é crédito.
+`Movement()` retorna `ErrUnresolvedReference` para ROLLBACK; `ReversalMovement`
+valida a referência e deriva CREDIT para BET, DEBIT para WIN/REFUND.
 
 `NewOpeningTransaction` aceita identidade interna estável, carteira, jogador,
 Money positivo e horário, sem exigir nem aceitar metadados externos.
@@ -117,7 +117,8 @@ Entrar em espera exige referência externa. Não há transição de espera de vo
 para PENDING; retries mantêm a espera até resultado definitivo.
 Processamento com referência externa exige registrar também a identidade interna
 resolvida, inclusive em WIN com referência opcional informada.
-O relacionamento financeiro com o original ainda não é resolvido nem validado aqui.
+`ReversalReferenceFailure` valida tipo, contexto e valor contra o snapshot original.
+A aplicação resolve a identidade e coordena duplicidade/concorrência no PostgreSQL.
 
 `FinancialResult` contém saldo original e versão da carteira. É obrigatório em
 PROCESSED e opcional em REJECTED; rejeições sem saldo disponível para resposta
@@ -187,6 +188,7 @@ de UUID no domínio.
   veja [OUTBOX.md](OUTBOX.md).
 - A Parte 5A implementa REFUND integral, validação de referência, proteção SQL
   contra duplicata e evento de pendência; veja [REFERENCES.md](REFERENCES.md).
-- ROLLBACK e resolução automática de pendências ficam para a Parte 5B.
+- A Parte 5B implementa ROLLBACK e resolução automática de pendências;
+  veja [REFERENCE_RETRY.md](REFERENCE_RETRY.md).
   A inbox da Parte 4B e a integração do
   consumer são descritas em [INBOX.md](INBOX.md); o domínio não depende de SQS.

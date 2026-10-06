@@ -1,4 +1,4 @@
-# Execução das Partes 1, 2, 3, 4A, 4B e 5A
+# Execução das Partes 1, 2, 3, 4A, 4B, 5A e 5B
 
 ## Pré-requisitos
 
@@ -9,8 +9,8 @@ Os checks locais desta entrega foram executados com Go 1.27.1 no Windows.
 
 ## Ambiente completo
 
-A Parte 5A acrescenta a migration 0004 e REFUND no serviço/consumer;
-veja [REFERENCES.md](REFERENCES.md). Aplique UP antes de iniciar a API.
+A Parte 5B acrescenta a migration 0005, ROLLBACK e ReferenceWorker;
+veja [REFERENCE_RETRY.md](REFERENCE_RETRY.md). Aplique UP antes de iniciar a API.
 
 Em checkout limpo, primeiro execute `docker compose up -d --wait postgres localstack`,
 configure DATABASE_URL e aplique `go run ./cmd/migrate up`. Em seguida:
@@ -91,6 +91,15 @@ de `.env.example` são para execução no host.
 | `SQS_QUEUE_NAME` | `wager-transactions.fifo` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Cadeia padrão do AWS SDK; `test` para LocalStack |
 | `OIDC_ISSUER_URL` | Reservada para futura integração OIDC; ainda não é lida |
+| `REFERENCE_BATCH_SIZE` | `5`; de 1 a 20 |
+| `REFERENCE_POLL_INTERVAL` | `1s` |
+| `REFERENCE_LEASE` | `30s`; maior que lote × timeout de resolução + DEPENDENCY_TIMEOUT |
+| `REFERENCE_PROCESS_TIMEOUT` | `5s`; máximo 10s |
+| `REFERENCE_RETRY_BASE` | `5s` |
+| `REFERENCE_RETRY_MAX` | `5m`; pelo menos a base |
+| `REFERENCE_MAX_ATTEMPTS` | `10`; de 1 a 1000; sem TTL adicional |
+
+Durações de referências aceitam de 1us a 24h, respeitando os limites acima.
 
 Configuração inválida ou falha na conexão inicial impede a abertura do servidor.
 A API não provisiona infraestrutura nem aplica migrations.

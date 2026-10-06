@@ -8,6 +8,12 @@ import (
 func TestLoad(t *testing.T) {
 	for _, test := range []struct{ name, key, value, wantError string }{
 		{name: "defaults"},
+		{name: "reference attempts zero", key: "REFERENCE_MAX_ATTEMPTS", value: "0", wantError: "REFERENCE_MAX_ATTEMPTS"},
+		{name: "reference batch zero", key: "REFERENCE_BATCH_SIZE", value: "0", wantError: "REFERENCE_BATCH_SIZE"},
+		{name: "reference unsafe lease", key: "REFERENCE_LEASE", value: "1s", wantError: "REFERENCE_LEASE"},
+		{name: "reference retry cap", key: "REFERENCE_RETRY_MAX", value: "1ms", wantError: "REFERENCE_RETRY_MAX"},
+		{name: "reference zero poll", key: "REFERENCE_POLL_INTERVAL", value: "0s", wantError: "REFERENCE_POLL_INTERVAL"},
+		{name: "reference resolution timeout", key: "REFERENCE_PROCESS_TIMEOUT", value: "11s", wantError: "REFERENCE_PROCESS_TIMEOUT"},
 		{name: "missing database", key: "DATABASE_URL", value: "", wantError: "DATABASE_URL"},
 		{name: "invalid database", key: "DATABASE_URL", value: "password=secret", wantError: "DATABASE_URL"},
 		{name: "invalid address", key: "HTTP_ADDR", value: "localhost", wantError: "HTTP_ADDR"},

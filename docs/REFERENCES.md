@@ -1,5 +1,9 @@
 # REFUND e referências financeiras — Parte 5A
 
+Este documento registra a entrega da Parte 5A. A Parte 5B amplia a proteção para
+REFUND/ROLLBACK e implementa o worker: [REFERENCE_RETRY.md](REFERENCE_RETRY.md).
+Replays continuam sem resolver pendências; o worker usa uma transação própria.
+
 `FinancialService.Process` e `ProcessIncoming` usam o mesmo `processOperation`.
 REFUND credita integralmente uma BET PROCESSED, com ledger CREDIT, próxima versão
 da carteira, resultado original persistido e dois snapshots na outbox. Não há

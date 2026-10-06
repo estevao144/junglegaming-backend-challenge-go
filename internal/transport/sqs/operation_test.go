@@ -58,26 +58,30 @@ func TestMalformedAndSemanticMessages(t *testing.T) {
 	}
 }
 
-func TestRefundReferenceMappingAndHash(t *testing.T) {
-	body := strings.Replace(validOperation, `"kind":"BET"`, `"kind":"REFUND","referenceExternalTransactionId":"original-bet"`, 1)
-	incoming, err := ParseOperation(body, "consumer", "source")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if incoming.Command.Kind != domain.Refund || incoming.Command.ReferenceExternalTransactionID != "original-bet" || incoming.Command.IdempotencyKey != "original-custom-key" {
-		t.Fatal("reference input lost")
-	}
-	hash, err := application.PayloadHash(incoming.Command)
-	if err != nil {
-		t.Fatal(err)
-	}
-	changed := incoming.Command
-	changed.ReferenceExternalTransactionID = "other-bet"
-	other, err := application.PayloadHash(changed)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if hash == other {
-		t.Fatal("reference must participate in financial hash")
+func TestReversalReferenceMappingAndHash(t *testing.T) {
+	for _, kind := range []domain.TransactionKind{domain.Refund, domain.Rollback} {
+		t.Run(string(kind), func(t *testing.T) {
+			body := strings.Replace(validOperation, `"kind":"BET"`, `"kind":"`+string(kind)+`","referenceExternalTransactionId":"original-bet"`, 1)
+			incoming, err := ParseOperation(body, "consumer", "source")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if incoming.Command.Kind != kind || incoming.Command.ReferenceExternalTransactionID != "original-bet" || incoming.Command.IdempotencyKey != "original-custom-key" {
+				t.Fatal("reference input lost")
+			}
+			hash, err := application.PayloadHash(incoming.Command)
+			if err != nil {
+				t.Fatal(err)
+			}
+			changed := incoming.Command
+			changed.ReferenceExternalTransactionID = "other-bet"
+			other, err := application.PayloadHash(changed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if hash == other {
+				t.Fatal("reference must participate in financial hash")
+			}
+		})
 	}
 }

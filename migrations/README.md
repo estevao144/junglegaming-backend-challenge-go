@@ -18,6 +18,15 @@ referência de REFUND processado, validação SQL do contexto/valor e inbox com
 resolução durável PENDING_REFERENCE. Versões 0001–0003 permanecem intactas.
 Consulte [REFERENCES.md](../docs/REFERENCES.md) para regras e testes da Parte 5A.
 
+`0005_reference_retry` cria a fila persistente de tentativas/leases, agenda pendings
+legados, protege a unicidade conjunta REFUND/ROLLBACK, valida referências de ROLLBACK
+e a direção do ledger, e amplia a inbox sem alterar sua resolução histórica.
+Versões 0001–0004 permanecem intactas. Veja
+[REFERENCE_RETRY.md](../docs/REFERENCE_RETRY.md). O DOWN restaura a constraint de
+inbox como NOT VALID para preservar resoluções existentes até o runner remover
+todas as versões na mesma transação. Não use DOWN como reset da fila em produção:
+tentativas e leases são descartados; um novo UP reagenda pendings com attempts=0.
+
 Defina DATABASE_URL e execute `go run ./cmd/migrate up` ou, para remover o schema
 financeiro, `go run ./cmd/migrate down`. A aplicação não aplica migrations no startup.
 

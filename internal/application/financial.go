@@ -162,10 +162,10 @@ func (s *FinancialService) Process(ctx context.Context, c ProcessCommand) (Proce
 }
 
 func prepareOperation(c ProcessCommand) (*domain.WagerTransaction, string, error) {
-	if c.Kind != domain.Bet && c.Kind != domain.Win && c.Kind != domain.Loss && c.Kind != domain.Refund {
+	if c.Kind != domain.Bet && c.Kind != domain.Win && c.Kind != domain.Loss && c.Kind != domain.Refund && c.Kind != domain.Rollback {
 		return nil, "", ErrUnsupportedOperation
 	}
-	if c.ReferenceExternalTransactionID != "" && c.Kind != domain.Refund {
+	if c.ReferenceExternalTransactionID != "" && c.Kind != domain.Refund && c.Kind != domain.Rollback {
 		return nil, "", ErrUnsupportedOperation
 	}
 	if !eventIdentity(c.CorrelationID, c.CausationID) {
@@ -230,8 +230,9 @@ func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCo
 		at = before.UpdatedAt
 	}
 	var referenceID string
-	if c.Kind == domain.Refund {
-		referenceID, err = prepareRefundReference(ctx, r, transaction, before, at)
+	var direction domain.Direction
+	if c.Kind == domain.Refund || c.Kind == domain.Rollback {
+		referenceID, direction, err = prepareReversalReference(ctx, r, transaction, before, at, true)
 		if err != nil {
 			return err
 		}
@@ -239,26 +240,48 @@ func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCo
 			outcome.Transaction = transaction.Snapshot()
 			return nil
 		}
+	} else {
+		direction, err = transaction.Movement()
+		if err != nil {
+			return err
+		}
 	}
-	switch c.Kind {
-	case domain.Bet:
-		err = wallet.Debit(c.Money, at)
-	case domain.Win, domain.Refund:
-		err = wallet.Credit(c.Money, at)
-	case domain.Loss: // Never call financial wallet methods for LOSS.
+	if err := applyFinancialMovement(ctx, r, transaction, wallet, referenceID, direction, at); err != nil {
+		return err
+	}
+	outcome.Transaction = transaction.Snapshot()
+	return nil
+}
+
+// Requests and the reference worker share these exact writes and rejection rules.
+func applyFinancialMovement(ctx context.Context, r *postgres.Repositories, transaction *domain.WagerTransaction, wallet *domain.Wallet, referenceID string, direction domain.Direction, at time.Time) error {
+	before := wallet.Snapshot()
+	data := transaction.Snapshot().Data
+	var err error
+	switch direction {
+	case domain.DebitDirection:
+		err = wallet.Debit(data.Money, at)
+	case domain.CreditDirection:
+		err = wallet.Credit(data.Money, at)
+	case domain.NoMovement: // LOSS never calls financial wallet methods.
+	default:
+		return domain.ErrUnresolvedReference
 	}
 	if errors.Is(err, domain.ErrInsufficientBalance) {
 		result := domain.FinancialResult{Balance: before.Balance, WalletVersion: before.Version}
-		if err := transaction.Reject(domain.FailureInsufficientBalance, &result, at); err != nil {
+		failure := domain.FailureInsufficientBalance
+		if data.Kind == domain.Rollback {
+			failure = domain.FailureReversalInsufficientBalance
+		}
+		if err := transaction.RejectReference(failure, result, referenceID, at); err != nil {
 			return err
 		}
 		if err := r.Transactions.Complete(ctx, transaction); err != nil {
 			return err
 		}
-		if err := recordRejected(ctx, r, transaction, c.CorrelationID, c.CausationID); err != nil {
+		if err := recordRejected(ctx, r, transaction, data.CorrelationID, data.CausationID); err != nil {
 			return err
 		}
-		outcome.Transaction = transaction.Snapshot()
 		return nil
 	}
 	if err != nil {
@@ -272,12 +295,8 @@ func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCo
 		return err
 	}
 	var entry *domain.WalletLedgerEntry
-	if c.Kind != domain.Loss {
+	if direction != domain.NoMovement {
 		if err := r.Wallets.Update(ctx, wallet, before.Version); err != nil {
-			return err
-		}
-		direction, err := transaction.Movement()
-		if err != nil {
 			return err
 		}
 		created, err := newEntry(transaction, direction, before.Balance, after.Balance, at)
@@ -289,10 +308,9 @@ func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCo
 		}
 		entry = &created
 	}
-	if err := recordProcessed(ctx, r, transaction, entry, c.CorrelationID, c.CausationID); err != nil {
+	if err := recordProcessed(ctx, r, transaction, entry, data.CorrelationID, data.CausationID); err != nil {
 		return err
 	}
-	outcome.Transaction = transaction.Snapshot()
 	return nil
 }
 

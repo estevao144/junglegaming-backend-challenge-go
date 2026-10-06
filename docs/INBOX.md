@@ -26,8 +26,9 @@ já provisiona a entrada, `wager-transactions-dlq.fifo` e RedrivePolicy com
 }
 ```
 
-Suporta BET, WIN sem referência, LOSS (amount `"0.00"`) e REFUND integral com
-`data.referenceExternalTransactionId` obrigatório. Veja [REFERENCES.md](REFERENCES.md).
+Suporta BET, WIN sem referência, LOSS (amount `"0.00"`), REFUND e ROLLBACK integrais.
+Reversões exigem `data.referenceExternalTransactionId`. Veja
+[REFERENCES.md](REFERENCES.md) e [REFERENCE_RETRY.md](REFERENCE_RETRY.md).
 Money exige string com
 duas casas e BRL, sem ponto flutuante. Wallet deve existir. JSON, envelope, campos
 obrigatórios e tipos precisam ser válidos; campos desconhecidos são recusados.
@@ -53,7 +54,7 @@ hash SHA-256 do corpo completo, correlação, timestamps, status, transaction_id
 failure_code. FK vincula resolução financeira. Triggers proíbem alteração de
 identidade/resultado e commit de inbox PENDING, e validam o vínculo financeiro.
 A resolução PENDING_REFERENCE conserva o snapshot da entrega, sem impedir a
-transição financeira futura descrita em [REFERENCES.md](REFERENCES.md).
+transição financeira posterior descrita em [REFERENCE_RETRY.md](REFERENCE_RETRY.md).
 
 Inbox distingue entregas; a idempotência financeira distingue operações por
 provider/chave/ID externo e hash canônico. O hash financeiro original não muda
@@ -69,7 +70,7 @@ parciais e persistir rejeição terminal; RELEASE SAVEPOINT não confirma a tran
 externa. Erros desconhecidos/infraestrutura e falhas no commit desfazem tudo.
 
 **DeleteMessage ocorre apenas após COMMIT** de PROCESSED, REJECTED ou
-PENDING_REFERENCE (resolução durável da entrega, aguardando o futuro worker).
+PENDING_REFERENCE (resolução durável da entrega, aguardando ReferenceWorker).
 BET sem saldo
 mantém WagerTransactionRejected e seu evento, conforme Parte 3. Entrada sem modelo
 financeiro válido, conflito, operação não suportada ou overflow resolve inbox como

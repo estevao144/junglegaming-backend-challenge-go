@@ -35,6 +35,13 @@ type Config struct {
 	ConsumerWaitSeconds       int
 	ConsumerVisibilitySeconds int
 	ConsumerProcessTimeout    time.Duration
+	ReferenceBatchSize        int
+	ReferencePollInterval     time.Duration
+	ReferenceLease            time.Duration
+	ReferenceProcessTimeout   time.Duration
+	ReferenceRetryBase        time.Duration
+	ReferenceRetryMax         time.Duration
+	ReferenceMaxAttempts      int
 }
 
 // Load reads process environment. It deliberately does not load .env files.
@@ -143,6 +150,39 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	budget := time.Duration(c.ConsumerBatchSize)*(c.ConsumerProcessTimeout+c.DependencyTimeout) + c.DependencyTimeout
 	if time.Duration(c.ConsumerVisibilitySeconds)*time.Second <= budget {
 		return Config{}, fmt.Errorf("SQS_VISIBILITY_SECONDS must exceed the batch processing and acknowledgement budget")
+	}
+	c.ReferenceBatchSize, err = strconv.Atoi(get("REFERENCE_BATCH_SIZE", "5"))
+	if err != nil || c.ReferenceBatchSize < 1 || c.ReferenceBatchSize > 20 {
+		return Config{}, fmt.Errorf("REFERENCE_BATCH_SIZE must be between 1 and 20")
+	}
+	c.ReferenceMaxAttempts, err = strconv.Atoi(get("REFERENCE_MAX_ATTEMPTS", "10"))
+	if err != nil || c.ReferenceMaxAttempts < 1 || c.ReferenceMaxAttempts > 1000 {
+		return Config{}, fmt.Errorf("REFERENCE_MAX_ATTEMPTS must be between 1 and 1000")
+	}
+	for _, setting := range []struct {
+		name     string
+		fallback string
+		value    *time.Duration
+	}{
+		{"REFERENCE_POLL_INTERVAL", "1s", &c.ReferencePollInterval},
+		{"REFERENCE_LEASE", "30s", &c.ReferenceLease},
+		{"REFERENCE_PROCESS_TIMEOUT", "5s", &c.ReferenceProcessTimeout},
+		{"REFERENCE_RETRY_BASE", "5s", &c.ReferenceRetryBase},
+		{"REFERENCE_RETRY_MAX", "5m", &c.ReferenceRetryMax},
+	} {
+		*setting.value, err = time.ParseDuration(get(setting.name, setting.fallback))
+		if err != nil || *setting.value < time.Microsecond || *setting.value > 24*time.Hour {
+			return Config{}, fmt.Errorf("%s must be at least 1us and at most 24h", setting.name)
+		}
+	}
+	if c.ReferenceProcessTimeout > 10*time.Second {
+		return Config{}, fmt.Errorf("REFERENCE_PROCESS_TIMEOUT must be at most 10s")
+	}
+	if c.ReferenceRetryMax < c.ReferenceRetryBase {
+		return Config{}, fmt.Errorf("REFERENCE_RETRY_MAX must be at least REFERENCE_RETRY_BASE")
+	}
+	if c.ReferenceLease <= time.Duration(c.ReferenceBatchSize)*c.ReferenceProcessTimeout+c.DependencyTimeout {
+		return Config{}, fmt.Errorf("REFERENCE_LEASE must exceed the batch processing and claim budget")
 	}
 	return c, nil
 }

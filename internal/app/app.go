@@ -13,7 +13,7 @@ import (
 	"jungle-gaming/internal/workers"
 )
 
-var Module = fx.Module("application", config.Module, logging.Module, postgres.Module, messaging.Module, httptransport.Module, workers.Module, workers.ConsumerModule,
+var Module = fx.Module("application", config.Module, logging.Module, postgres.Module, messaging.Module, httptransport.Module, workers.Module, workers.ConsumerModule, workers.ReferenceModule,
 	fx.Provide(postgres.NewStore, application.NewFinancialService), fx.Invoke(func(*application.FinancialService) {}))
 
 func New(options ...fx.Option) *fx.App {

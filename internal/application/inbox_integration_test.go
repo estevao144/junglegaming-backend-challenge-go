@@ -316,7 +316,7 @@ func TestInboxTerminalRejectionsAndSavepoint(t *testing.T) {
 		financial             bool
 	}{
 		{"insufficient", domain.Bet, "200.00", "100.00", "INSUFFICIENT_BALANCE", true},
-		{"unsupported", domain.Rollback, "25.00", "100.00", "UNSUPPORTED_OPERATION", false},
+		{"unsupported", domain.TransactionKind("UNKNOWN"), "25.00", "100.00", "UNSUPPORTED_OPERATION", false},
 		{"overflow", domain.Win, "1.00", "92233720368547758.07", "ARITHMETIC_OVERFLOW", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {

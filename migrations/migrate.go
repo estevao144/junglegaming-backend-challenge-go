@@ -39,7 +39,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool, direction string) error {
 		version INTEGER PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`); err != nil {
 		return err
 	}
-	versions := []string{"0001_financial", "0002_outbox_delivery", "0003_inbox", "0004_references"}
+	versions := []string{"0001_financial", "0002_outbox_delivery", "0003_inbox", "0004_references", "0005_reference_retry"}
 	for step := range versions {
 		index := step
 		if direction == "down" {

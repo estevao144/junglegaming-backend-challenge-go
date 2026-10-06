@@ -1,4 +1,4 @@
-# Arquitetura — Partes 1, 2, 3, 4A, 4B e 5A
+# Arquitetura — Partes 1, 2, 3, 4A, 4B, 5A e 5B
 
 Esta entrega estrutura o serviço e implementa as invariantes locais do núcleo
 financeiro. A Parte 3 implementa persistência financeira, processamento síncrono,
@@ -6,6 +6,9 @@ locks por carteira, idempotência persistente e registro atômico da outbox.
 A Parte 4A acrescenta publicação SQS FIFO com recuperação por lease e retry.
 A Parte 4B consome SQS usando o mesmo fluxo financeiro, com inbox no mesmo commit.
 A Parte 5A implementa REFUND integral e persiste referência pendente com evento.
+A Parte 5B implementa ROLLBACK e resolução persistente, com claim/lease, backoff
+e limite de tentativas. A política de reversão única por BET, ordem dos locks e
+recuperação estão em [REFERENCE_RETRY.md](docs/REFERENCE_RETRY.md).
 Veja [docs/DOMAIN.md](docs/DOMAIN.md) para o domínio e
 [docs/POSTGRES.md](docs/POSTGRES.md) para transações, migrations e testes reais.
 
@@ -22,8 +25,8 @@ Veja [docs/DOMAIN.md](docs/DOMAIN.md) para o domínio e
 | `internal/transport/http` | Servidor net/http e health checks |
 | `internal/transport/sqs` | Contrato JSON de entrada e mapping para FinancialService |
 | `internal/domain` | Money, Wallet, WagerTransaction e WalletLedgerEntry; apenas biblioteca padrão |
-| `internal/application` | Abertura, BET/WIN/LOSS/REFUND e referência pendente, compartilháveis por HTTP/SQS |
-| `internal/workers` | Publisher e consumer SQS com polling e lifecycle Fx |
+| `internal/application` | Abertura, BET/WIN/LOSS/REFUND/ROLLBACK e resolução de referências, compartilhados por HTTP/SQS/worker |
+| `internal/workers` | Publisher, consumer SQS e ReferenceWorker com polling e lifecycle Fx |
 | `migrations` | Schema financeiro UP/DOWN, runner pgx e arquivos SQL embutidos |
 | `cmd/migrate` | Aplicação/reversão explícita das migrations versionadas |
 
@@ -51,9 +54,10 @@ Essa ordem inversa dos hooks é descrita na
 [documentação do Fx](https://uber-go.github.io/fx/lifecycle.html).
 Startup tem orçamento global de 30s; shutdown, de 15s; Compose concede 20s ao processo.
 
-Não há workers nesta etapa. Cada worker futuro deverá parar de buscar trabalho,
-cancelar ou concluir suas operações, aguardar suas goroutines e terminar antes do
-fechamento do banco. O consumidor só poderá remover mensagens após commit durável.
+Os workers param de buscar trabalho e aguardam suas goroutines antes do fechamento
+do banco. ReferenceWorker cancela claims/resolução; escritas não confirmadas são
+desfeitas e os leases permitem recuperação. Consumer remove mensagens somente
+após commit durável; publisher mantém seus leases e snapshots persistidos.
 
 ## Persistência e integridade da Parte 3
 
@@ -122,8 +126,6 @@ operacional serão complementados nas etapas futuras.
 
 Estas escolhas orientam a estrutura; sua implementação e comprovação ainda estão pendentes.
 
-- Referências: worker de resolução, tentativas com backoff e prazo máximo na Parte 5B.
-- Reversões: ROLLBACK e política de combinação REFUND/ROLLBACK na Parte 5B.
 - Autenticação: Keycloak externo, OIDC e `client_credentials`; validação de assinatura,
   issuer, audience e expiração antes de expor rotas financeiras. `providerId` virá da
   identidade validada; operações de carteira exigirão role interna. Sem emissão própria de tokens.
@@ -135,20 +137,21 @@ na API porque ainda não existem endpoints de negócio. O provisionamento Keyclo
 prepara identidades locais, mas não comprova validação de tokens ou isolamento.
 
 As entidades, schema, repositories e casos de uso desta etapa estão implementados.
-ROLLBACK e WIN com referência ainda não são processados; retornam
-ErrUnsupportedOperation. REFUND existente é resolvido por provedor/ID externo,
+WIN com referência ainda retorna ErrUnsupportedOperation.
+REFUND e ROLLBACK são resolvidos por provedor/ID externo,
 com ID interno persistido, lock da carteira e índice único contra dupla devolução.
 Referência ausente gera PENDING_REFERENCE durável, sem movimento. Replay não
-resolve a pendência nesta etapa. Detalhes em [REFERENCES.md](docs/REFERENCES.md).
+resolve a pendência; ReferenceWorker faz isso separadamente. Detalhes em
+[REFERENCES.md](docs/REFERENCES.md) e [REFERENCE_RETRY.md](docs/REFERENCE_RETRY.md).
 Faltam rotas financeiras, autenticação/autorização efetiva, reconciliação com cursor,
-workers de referências, métricas e controles de broker. Publisher e consumer estão
+métricas e controles de broker. Publisher, consumer e ReferenceWorker estão
 implementados e testados. Inbox usa chave consumer/QueueArn/messageId do envelope
 e hash de corpo separado do hash financeiro. FinancialService compartilha seu
 fluxo interno entre Process e ProcessIncoming; savepoint permite registrar erro
 terminal sem deixar escritas parciais. Inbox e financeiro compartilham COMMIT;
 DeleteMessage vem depois. Recuperação e DLQ estão em [INBOX.md](docs/INBOX.md).
 Inbox pode confirmar entrega com referência pendente; sua resolução imutável não
-impede a transição financeira futura. Nenhum worker de referência foi implementado.
+impede a transição financeira posterior realizada pelo worker.
 
 As imagens Docker têm tags fixas; o ambiente local usa credenciais de exemplo.
 O volume PostgreSQL preserva dados; a infraestrutura Keycloak e as filas são

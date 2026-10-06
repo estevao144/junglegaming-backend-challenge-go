@@ -52,11 +52,13 @@ adaptadores. Ainda não há endpoint HTTP financeiro. A API existente expõe hea
 - `OpenWallet(ctx, playerID, balance, correlationID)`: criação interna, versão 1.
   Zero cria somente a carteira; positivo cria também OPENING, crédito no ledger
   e dois eventos, sem elevar a versão a 2.
-- `Process(ctx, ProcessCommand)`: BET, WIN sem referência, LOSS e REFUND integral.
+- `Process(ctx, ProcessCommand)`: BET, WIN sem referência, LOSS, REFUND e ROLLBACK integrais.
   O command preserva a chave recebida, recebe Money validado e exige correlationId.
-  ROLLBACK e WIN com referência retornam `ErrUnsupportedOperation`.
+  WIN com referência retorna `ErrUnsupportedOperation`.
   REFUND resolve BET por provedor/ID externo ou persiste PENDING_REFERENCE,
-  sem resolução automática; detalhes em [REFERENCES.md](REFERENCES.md).
+  resolvido depois por ReferenceWorker. ROLLBACK usa o mesmo fluxo e persiste
+  referência interna, direção inversa e resultado original; veja
+  [REFERENCE_RETRY.md](REFERENCE_RETRY.md).
 - `Store.GetWallet`, `GetLedger`, `GetTransaction` e `GetExternalTransaction`
   consultam e reidratam os modelos. Consultas externas de transação filtram providerId.
   A consulta de ledger é interna e ainda não implementa o cursor opaco da API futura.
@@ -85,7 +87,8 @@ Carteiras distintas não compartilham locks. Nenhum mutex local protege a integr
 Não há commit intermediário de PENDING neste processamento síncrono. Uma interrupção
 antes do commit permite reenvio; depois do commit, reenvio lê a operação terminal.
 Erro de commit pode ser ambíguo para o cliente: reenvie a mesma identidade para
-consultar o resultado, sem gerar uma nova operação. O serviço não implementa retry.
+consultar o resultado, sem gerar uma nova operação. Process não faz retry automático;
+ReferenceWorker agenda e resolve apenas PENDING_REFERENCE, em transações separadas.
 
 ## Idempotência e hash
 

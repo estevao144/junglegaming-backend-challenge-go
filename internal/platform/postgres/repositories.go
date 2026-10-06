@@ -27,12 +27,13 @@ type LedgerRepository struct{ tx pgx.Tx }
 type OutboxRepository struct{ tx pgx.Tx }
 
 type Repositories struct {
-	tx           pgx.Tx
-	Inbox        InboxRepository
-	Wallets      WalletRepository
-	Transactions TransactionRepository
-	Ledger       LedgerRepository
-	Outbox       OutboxRepository
+	tx               pgx.Tx
+	Inbox            InboxRepository
+	Wallets          WalletRepository
+	Transactions     TransactionRepository
+	Ledger           LedgerRepository
+	Outbox           OutboxRepository
+	ReferenceRetries ReferenceRetryRepository
 }
 
 // WithTx owns BEGIN/COMMIT/ROLLBACK. All repositories use this exact pgx.Tx.
@@ -57,7 +58,7 @@ func (s *Store) WithTx(ctx context.Context, work func(*Repositories) error) erro
 }
 
 func repositoriesFor(tx pgx.Tx) *Repositories {
-	return &Repositories{tx: tx, Inbox: InboxRepository{tx}, Wallets: WalletRepository{tx}, Transactions: TransactionRepository{tx}, Ledger: LedgerRepository{tx}, Outbox: OutboxRepository{tx}}
+	return &Repositories{tx: tx, Inbox: InboxRepository{tx}, Wallets: WalletRepository{tx}, Transactions: TransactionRepository{tx}, Ledger: LedgerRepository{tx}, Outbox: OutboxRepository{tx}, ReferenceRetries: ReferenceRetryRepository{tx}}
 }
 
 // WithSavepoint rolls back financial writes on a terminal input error, while

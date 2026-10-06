@@ -1,3 +1,3 @@
-// Package workers manages the outbox publisher and operation consumer through Fx.
-// Reference retries belong to later challenge parts.
+// Package workers manages outbox publication, SQS consumption and persistent
+// reference resolution through Fx.
 package workers

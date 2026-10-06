@@ -1,4 +1,4 @@
-# Jungle Gaming — Partes 1, 2, 3, 4A, 4B e 5A
+# Jungle Gaming — Partes 1, 2, 3, 4A, 4B, 5A e 5B
 
 Base Go + Uber Fx para o desafio abaixo. Esta etapa inclui configuração validada,
 logs JSON, lifecycle do servidor HTTP e PostgreSQL, cliente SQS e health checks.
@@ -8,8 +8,9 @@ repositories e os casos de uso transacionais de abertura, BET, WIN sem referênc
 e LOSS, com idempotência e outbox. A Parte 4A publica os snapshots da outbox no
 SQS FIFO, com claims concorrentes, leases e retry. A Parte 4B consome operações
 SQS com inbox atômica e o mesmo serviço financeiro. A Parte 5A implementa REFUND
-integral e referência pendente durável. Endpoints de negócio, autenticação,
-ROLLBACK e worker de referências ficam para as próximas etapas.
+integral e referência pendente durável. A Parte 5B implementa ROLLBACK e worker
+persistente de referências, com backoff, limite de tentativas e recuperação após
+restart. Endpoints de negócio e autenticação ficam para as próximas etapas.
 
 - [Execução local, variáveis e testes](docs/DEVELOPMENT.md)
 - [Decisões e trabalho pendente](ARCHITECTURE.md)
@@ -18,6 +19,7 @@ ROLLBACK e worker de referências ficam para as próximas etapas.
 - [Outbox Publisher, SQS FIFO e testes reais da Parte 4A](docs/OUTBOX.md)
 - [Consumer, inbox, redelivery e DLQ da Parte 4B](docs/INBOX.md)
 - [REFUND, referências e concorrência da Parte 5A](docs/REFERENCES.md)
+- [ROLLBACK, política de reversões e retry persistente da Parte 5B](docs/REFERENCE_RETRY.md)
 
 Início rápido: suba `docker compose up -d --wait postgres localstack`, configure
 DATABASE_URL e execute `go run ./cmd/migrate up` antes de `docker compose up --build`.
