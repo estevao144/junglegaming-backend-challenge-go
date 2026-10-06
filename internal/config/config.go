@@ -16,19 +16,25 @@ import (
 var Module = fx.Module("config", fx.Provide(Load))
 
 type Config struct {
-	HTTPAddress        string
-	DatabaseURL        string
-	AWSRegion          string
-	SQSEndpoint        string
-	SQSQueueName       string
-	LogLevel           slog.Level
-	DependencyTimeout  time.Duration
-	SQSEventsQueueName string
-	OutboxBatchSize    int
-	OutboxPollInterval time.Duration
-	OutboxLease        time.Duration
-	OutboxRetryBase    time.Duration
-	OutboxRetryMax     time.Duration
+	HTTPAddress               string
+	DatabaseURL               string
+	AWSRegion                 string
+	SQSEndpoint               string
+	SQSQueueName              string
+	LogLevel                  slog.Level
+	DependencyTimeout         time.Duration
+	SQSEventsQueueName        string
+	OutboxBatchSize           int
+	OutboxPollInterval        time.Duration
+	OutboxLease               time.Duration
+	OutboxRetryBase           time.Duration
+	OutboxRetryMax            time.Duration
+	ConsumerName              string
+	ConsumerConcurrency       int
+	ConsumerBatchSize         int
+	ConsumerWaitSeconds       int
+	ConsumerVisibilitySeconds int
+	ConsumerProcessTimeout    time.Duration
 }
 
 // Load reads process environment. It deliberately does not load .env files.
@@ -109,6 +115,34 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	}
 	if c.OutboxRetryMax < c.OutboxRetryBase {
 		return Config{}, fmt.Errorf("OUTBOX_RETRY_MAX must be at least OUTBOX_RETRY_BASE")
+	}
+	c.ConsumerName = get("SQS_CONSUMER_NAME", "financial-operations-v1")
+	if c.ConsumerName == "" || strings.TrimSpace(c.ConsumerName) != c.ConsumerName {
+		return Config{}, fmt.Errorf("SQS_CONSUMER_NAME must be a nonempty identity")
+	}
+	for _, setting := range []struct {
+		name     string
+		fallback string
+		value    *int
+		maximum  int
+	}{
+		{"SQS_CONSUMER_CONCURRENCY", "2", &c.ConsumerConcurrency, 10},
+		{"SQS_CONSUMER_BATCH_SIZE", "1", &c.ConsumerBatchSize, 10},
+		{"SQS_CONSUMER_WAIT_SECONDS", "20", &c.ConsumerWaitSeconds, 20},
+		{"SQS_VISIBILITY_SECONDS", "30", &c.ConsumerVisibilitySeconds, 43200},
+	} {
+		*setting.value, err = strconv.Atoi(get(setting.name, setting.fallback))
+		if err != nil || *setting.value < 1 || *setting.value > setting.maximum {
+			return Config{}, fmt.Errorf("%s must be between 1 and %d", setting.name, setting.maximum)
+		}
+	}
+	c.ConsumerProcessTimeout, err = time.ParseDuration(get("SQS_PROCESS_TIMEOUT", "5s"))
+	if err != nil || c.ConsumerProcessTimeout <= 0 || c.ConsumerProcessTimeout > 10*time.Second {
+		return Config{}, fmt.Errorf("SQS_PROCESS_TIMEOUT must be positive and at most 10s")
+	}
+	budget := time.Duration(c.ConsumerBatchSize)*(c.ConsumerProcessTimeout+c.DependencyTimeout) + c.DependencyTimeout
+	if time.Duration(c.ConsumerVisibilitySeconds)*time.Second <= budget {
+		return Config{}, fmt.Errorf("SQS_VISIBILITY_SECONDS must exceed the batch processing and acknowledgement budget")
 	}
 	return c, nil
 }

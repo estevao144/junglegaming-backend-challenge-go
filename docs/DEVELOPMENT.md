@@ -1,4 +1,4 @@
-# Execução das Partes 1, 2, 3 e 4A
+# Execução das Partes 1, 2, 3, 4A e 4B
 
 ## Pré-requisitos
 
@@ -27,7 +27,8 @@ O script da imagem LocalStack cria automaticamente:
 - `wager-transactions-dlq.fifo`: destino das falhas de entrada.
 - `wager-events.fifo`: destino dos eventos de integração da outbox.
 
-As filas ainda não são consumidas. O publisher da Parte 4A envia snapshots para a
+O consumer da Parte 4B trata operações na fila de entrada, com inbox, redelivery e
+DLQ; veja [INBOX.md](INBOX.md). O publisher da Parte 4A envia snapshots para a
 fila de eventos com identidade estável e retries; veja [OUTBOX.md](OUTBOX.md) para
 variáveis, execução e testes PostgreSQL + LocalStack. LocalStack usa credenciais
 fictícias, sem isolamento IAM demonstrado.

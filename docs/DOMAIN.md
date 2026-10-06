@@ -186,4 +186,5 @@ de UUID no domínio.
 - A Parte 4A publica os snapshots persistidos, sem dependências AWS no domínio;
   veja [OUTBOX.md](OUTBOX.md).
 - Políticas de reversão combinada, unicidade de reversões, resolução/recuperação
-  de pendências e inbox ainda serão implementadas.
+  de pendências ainda serão implementadas. A inbox da Parte 4B e a integração do
+  consumer são descritas em [INBOX.md](INBOX.md); o domínio não depende de SQS.

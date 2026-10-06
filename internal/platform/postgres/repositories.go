@@ -27,6 +27,8 @@ type LedgerRepository struct{ tx pgx.Tx }
 type OutboxRepository struct{ tx pgx.Tx }
 
 type Repositories struct {
+	tx           pgx.Tx
+	Inbox        InboxRepository
 	Wallets      WalletRepository
 	Transactions TransactionRepository
 	Ledger       LedgerRepository
@@ -44,7 +46,7 @@ func (s *Store) WithTx(ctx context.Context, work func(*Repositories) error) erro
 		defer cancel()
 		_ = tx.Rollback(cleanup)
 	}()
-	repos := &Repositories{Wallets: WalletRepository{tx}, Transactions: TransactionRepository{tx}, Ledger: LedgerRepository{tx}, Outbox: OutboxRepository{tx}}
+	repos := repositoriesFor(tx)
 	if err := work(repos); err != nil {
 		return err
 	}
@@ -52,6 +54,28 @@ func (s *Store) WithTx(ctx context.Context, work func(*Repositories) error) erro
 		return fmt.Errorf("financial commit: %w", err)
 	}
 	return nil
+}
+
+func repositoriesFor(tx pgx.Tx) *Repositories {
+	return &Repositories{tx: tx, Inbox: InboxRepository{tx}, Wallets: WalletRepository{tx}, Transactions: TransactionRepository{tx}, Ledger: LedgerRepository{tx}, Outbox: OutboxRepository{tx}}
+}
+
+// WithSavepoint rolls back financial writes on a terminal input error, while
+// allowing the surrounding inbox transaction to durably record that rejection.
+func (r *Repositories) WithSavepoint(ctx context.Context, work func(*Repositories) error) error {
+	tx, err := r.tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
+	if err := work(repositoriesFor(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx) // RELEASE SAVEPOINT, not the outer financial COMMIT.
 }
 
 func classify(err error) error {

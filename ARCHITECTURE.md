@@ -1,9 +1,10 @@
-# Arquitetura — Partes 1, 2, 3 e 4A
+# Arquitetura — Partes 1, 2, 3, 4A e 4B
 
 Esta entrega estrutura o serviço e implementa as invariantes locais do núcleo
 financeiro. A Parte 3 implementa persistência financeira, processamento síncrono,
 locks por carteira, idempotência persistente e registro atômico da outbox.
 A Parte 4A acrescenta publicação SQS FIFO com recuperação por lease e retry.
+A Parte 4B consome SQS usando o mesmo fluxo financeiro, com inbox no mesmo commit.
 Veja [docs/DOMAIN.md](docs/DOMAIN.md) para o domínio e
 [docs/POSTGRES.md](docs/POSTGRES.md) para transações, migrations e testes reais.
 
@@ -18,9 +19,10 @@ Veja [docs/DOMAIN.md](docs/DOMAIN.md) para o domínio e
 | `internal/platform/postgres` | Pool pgx, lifecycle, repositories e delimitação de pgx.Tx |
 | `internal/platform/messaging` | Cliente AWS SDK v2, checks SQS e envio de snapshots |
 | `internal/transport/http` | Servidor net/http e health checks |
+| `internal/transport/sqs` | Contrato JSON de entrada e mapping para FinancialService |
 | `internal/domain` | Money, Wallet, WagerTransaction e WalletLedgerEntry; apenas biblioteca padrão |
 | `internal/application` | Abertura de carteira e processamento de BET/WIN/LOSS compartilhável por HTTP/SQS |
-| `internal/workers` | Publisher de outbox com polling, backoff e lifecycle Fx |
+| `internal/workers` | Publisher e consumer SQS com polling e lifecycle Fx |
 | `migrations` | Schema financeiro UP/DOWN, runner pgx e arquivos SQL embutidos |
 | `cmd/migrate` | Aplicação/reversão explícita das migrations versionadas |
 
@@ -123,7 +125,6 @@ Estas escolhas orientam a estrutura; sua implementação e comprovação ainda e
   Máquina de estados e códigos estáveis serão definidos antes do processamento.
 - Reversões: resolução por provedor/ID externo e proteção no banco contra devolução
   duplicada; a política para combinação REFUND/ROLLBACK ainda será especificada.
-- Inbox: tratamento durável atômico e idempotência do futuro consumer.
 - Autenticação: Keycloak externo, OIDC e `client_credentials`; validação de assinatura,
   issuer, audience e expiração antes de expor rotas financeiras. `providerId` virá da
   identidade validada; operações de carteira exigirão role interna. Sem emissão própria de tokens.
@@ -138,8 +139,12 @@ As entidades, schema, repositories e casos de uso desta etapa estão implementad
 REFUND, ROLLBACK, WIN com referência e espera persistente ainda não são processados;
 o serviço retorna ErrUnsupportedOperation, sem efeitos financeiros, para essas entradas.
 Faltam rotas financeiras, autenticação/autorização efetiva, reconciliação com cursor,
-inbox, consumer e workers de referências, retry/backoff/DLQ de entrada, métricas
-e controles de broker. O publisher de saída está implementado e testado.
+workers de referências, métricas e controles de broker. Publisher e consumer estão
+implementados e testados. Inbox usa chave consumer/QueueArn/messageId do envelope
+e hash de corpo separado do hash financeiro. FinancialService compartilha seu
+fluxo interno entre Process e ProcessIncoming; savepoint permite registrar erro
+terminal sem deixar escritas parciais. Inbox e financeiro compartilham COMMIT;
+DeleteMessage vem depois. Recuperação e DLQ estão em [INBOX.md](docs/INBOX.md).
 O consumidor e o IdP da infraestrutura da Parte 1 não foram ampliados nesta etapa.
 
 As imagens Docker têm tags fixas; o ambiente local usa credenciais de exemplo.

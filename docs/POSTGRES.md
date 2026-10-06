@@ -35,11 +35,14 @@ Reversão explícita:
 go run ./cmd/migrate down
 ```
 
-DOWN remove as quatro tabelas financeiras e seus dados. Use apenas quando essa
+DOWN remove as tabelas financeiras, outbox, inbox e seus dados. Use apenas quando essa
 remoção for desejada e com a aplicação parada. Os testes verificam DOWN em schemas
 temporários exclusivos, sem remover o schema de uso normal.
 A API não aplica migrations automaticamente. O banco deve ser preparado antes
 de chamar os casos de uso financeiros.
+
+A Parte 4B acrescenta `0003_inbox`, com resolução no mesmo commit financeiro.
+Migrations 0001/0002 não mudam. Veja [INBOX.md](INBOX.md).
 
 ## Casos de uso disponíveis
 

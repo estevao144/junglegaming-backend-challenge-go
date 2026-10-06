@@ -26,6 +26,12 @@ func TestLoad(t *testing.T) {
 		{name: "short lease", key: "OUTBOX_LEASE", value: "1s", wantError: "OUTBOX_LEASE"},
 		{name: "invalid retry", key: "OUTBOX_RETRY_BASE", value: "-1s", wantError: "OUTBOX_RETRY_BASE"},
 		{name: "retry cap", key: "OUTBOX_RETRY_MAX", value: "1ms", wantError: "OUTBOX_RETRY_MAX"},
+		{name: "empty consumer", key: "SQS_CONSUMER_NAME", value: "", wantError: "SQS_CONSUMER_NAME"},
+		{name: "zero concurrency", key: "SQS_CONSUMER_CONCURRENCY", value: "0", wantError: "SQS_CONSUMER_CONCURRENCY"},
+		{name: "large consumer batch", key: "SQS_CONSUMER_BATCH_SIZE", value: "11", wantError: "SQS_CONSUMER_BATCH_SIZE"},
+		{name: "long polling range", key: "SQS_CONSUMER_WAIT_SECONDS", value: "21", wantError: "SQS_CONSUMER_WAIT_SECONDS"},
+		{name: "unsafe visibility", key: "SQS_VISIBILITY_SECONDS", value: "2", wantError: "SQS_VISIBILITY_SECONDS"},
+		{name: "invalid process timeout", key: "SQS_PROCESS_TIMEOUT", value: "0s", wantError: "SQS_PROCESS_TIMEOUT"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			values := map[string]string{"DATABASE_URL": "postgres://user:secret@localhost:5432/jungle"}

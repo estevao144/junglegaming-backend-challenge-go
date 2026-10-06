@@ -147,22 +147,37 @@ func (s *FinancialService) OpenWallet(ctx context.Context, playerID string, bala
 // Process shares one implementation for future HTTP and SQS adapters. Provider
 // authentication is deliberately outside this use case and must precede it.
 func (s *FinancialService) Process(ctx context.Context, c ProcessCommand) (ProcessResult, error) {
+	transaction, hash, err := prepareOperation(c)
+	if err != nil {
+		return ProcessResult{}, err
+	}
+	var outcome ProcessResult
+	err = s.store.WithTx(ctx, func(r *postgres.Repositories) error {
+		return processOperation(ctx, r, c, transaction, hash, &outcome)
+	})
+	if err != nil {
+		return ProcessResult{}, err
+	}
+	return outcome, nil
+}
+
+func prepareOperation(c ProcessCommand) (*domain.WagerTransaction, string, error) {
 	if c.Kind != domain.Bet && c.Kind != domain.Win && c.Kind != domain.Loss {
-		return ProcessResult{}, ErrUnsupportedOperation
+		return nil, "", ErrUnsupportedOperation
 	}
 	if c.ReferenceExternalTransactionID != "" {
-		return ProcessResult{}, ErrUnsupportedOperation
+		return nil, "", ErrUnsupportedOperation
 	}
 	if !eventIdentity(c.CorrelationID, c.CausationID) {
-		return ProcessResult{}, fmt.Errorf("invalid correlation or causation identity")
+		return nil, "", fmt.Errorf("invalid correlation or causation identity")
 	}
 	hash, err := PayloadHash(c)
 	if err != nil {
-		return ProcessResult{}, err
+		return nil, "", err
 	}
 	id, err := newID()
 	if err != nil {
-		return ProcessResult{}, err
+		return nil, "", err
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	transaction, err := domain.NewWagerTransaction(domain.TransactionData{
@@ -170,103 +185,103 @@ func (s *FinancialService) Process(ctx context.Context, c ProcessCommand) (Proce
 		WalletID: c.WalletID, PlayerID: c.PlayerID, RoundID: c.RoundID, GameID: c.GameID, Kind: c.Kind, Money: c.Money,
 	}, at)
 	if err != nil {
-		return ProcessResult{}, err
+		return nil, "", err
 	}
-	var outcome ProcessResult
-	err = s.store.WithTx(ctx, func(r *postgres.Repositories) error {
+	return transaction, hash, nil
+}
+
+// processOperation contains the existing financial rules. Both entry paths use
+// these exact repositories and never open a second top-level transaction here.
+func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCommand, transaction *domain.WagerTransaction, hash string, outcome *ProcessResult) error {
+	at := transaction.Snapshot().CreatedAt
+	existing, err := r.Transactions.Identity(ctx, c.ProviderID, c.IdempotencyKey, c.ExternalTransactionID)
+	if err == nil {
+		return replay(existing, c, hash, outcome)
+	}
+	if !errors.Is(err, postgres.ErrNotFound) {
+		return err
+	}
+	// Lock first: an inserted transaction's FK takes KEY SHARE on the wallet.
+	// Acquiring FOR UPDATE afterwards could deadlock competing writers.
+	wallet, err := r.Wallets.Lock(ctx, c.WalletID)
+	if err != nil {
+		return err
+	}
+	before := wallet.Snapshot()
+	if before.PlayerID != c.PlayerID || before.Currency != c.Money.Currency() {
+		return ErrWalletIdentity
+	}
+	inserted, err := r.Transactions.Insert(ctx, transaction)
+	if err != nil {
+		return err
+	}
+	if !inserted {
+		// Separate statement: READ COMMITTED now observes the committed winner.
 		existing, err := r.Transactions.Identity(ctx, c.ProviderID, c.IdempotencyKey, c.ExternalTransactionID)
-		if err == nil {
-			return replay(existing, c, hash, &outcome)
-		}
-		if !errors.Is(err, postgres.ErrNotFound) {
-			return err
-		}
-		// Lock first: an inserted transaction's FK takes KEY SHARE on the wallet.
-		// Acquiring FOR UPDATE afterwards could deadlock competing writers.
-		wallet, err := r.Wallets.Lock(ctx, c.WalletID)
 		if err != nil {
 			return err
 		}
-		before := wallet.Snapshot()
-		if before.PlayerID != c.PlayerID || before.Currency != c.Money.Currency() {
-			return ErrWalletIdentity
-		}
-		inserted, err := r.Transactions.Insert(ctx, transaction)
-		if err != nil {
-			return err
-		}
-		if !inserted {
-			// Separate statement: READ COMMITTED now observes the committed winner.
-			existing, err := r.Transactions.Identity(ctx, c.ProviderID, c.IdempotencyKey, c.ExternalTransactionID)
-			if err != nil {
-				return err
-			}
-			return replay(existing, c, hash, &outcome)
-		}
-		// Capture time after acquiring the lock, avoiding a stale timestamp after waiting.
-		at = time.Now().UTC().Truncate(time.Microsecond)
-		if at.Before(before.UpdatedAt) {
-			at = before.UpdatedAt
-		}
-		switch c.Kind {
-		case domain.Bet:
-			err = wallet.Debit(c.Money, at)
-		case domain.Win:
-			err = wallet.Credit(c.Money, at)
-		case domain.Loss: // Never call financial wallet methods for LOSS.
-		}
-		if errors.Is(err, domain.ErrInsufficientBalance) {
-			result := domain.FinancialResult{Balance: before.Balance, WalletVersion: before.Version}
-			if err := transaction.Reject(domain.FailureInsufficientBalance, &result, at); err != nil {
-				return err
-			}
-			if err := r.Transactions.Complete(ctx, transaction); err != nil {
-				return err
-			}
-			if err := recordRejected(ctx, r, transaction, c.CorrelationID, c.CausationID); err != nil {
-				return err
-			}
-			outcome.Transaction = transaction.Snapshot()
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		after := wallet.Snapshot()
-		if err := transaction.MarkProcessed(domain.FinancialResult{Balance: after.Balance, WalletVersion: after.Version}, "", at); err != nil {
+		return replay(existing, c, hash, outcome)
+	}
+	// Capture time after acquiring the lock, avoiding a stale timestamp after waiting.
+	at = time.Now().UTC().Truncate(time.Microsecond)
+	if at.Before(before.UpdatedAt) {
+		at = before.UpdatedAt
+	}
+	switch c.Kind {
+	case domain.Bet:
+		err = wallet.Debit(c.Money, at)
+	case domain.Win:
+		err = wallet.Credit(c.Money, at)
+	case domain.Loss: // Never call financial wallet methods for LOSS.
+	}
+	if errors.Is(err, domain.ErrInsufficientBalance) {
+		result := domain.FinancialResult{Balance: before.Balance, WalletVersion: before.Version}
+		if err := transaction.Reject(domain.FailureInsufficientBalance, &result, at); err != nil {
 			return err
 		}
 		if err := r.Transactions.Complete(ctx, transaction); err != nil {
 			return err
 		}
-		var entry *domain.WalletLedgerEntry
-		if c.Kind != domain.Loss {
-			if err := r.Wallets.Update(ctx, wallet, before.Version); err != nil {
-				return err
-			}
-			direction, err := transaction.Movement()
-			if err != nil {
-				return err
-			}
-			created, err := newEntry(transaction, direction, before.Balance, after.Balance, at)
-			if err != nil {
-				return err
-			}
-			if err := r.Ledger.Insert(ctx, created); err != nil {
-				return err
-			}
-			entry = &created
-		}
-		if err := recordProcessed(ctx, r, transaction, entry, c.CorrelationID, c.CausationID); err != nil {
+		if err := recordRejected(ctx, r, transaction, c.CorrelationID, c.CausationID); err != nil {
 			return err
 		}
 		outcome.Transaction = transaction.Snapshot()
 		return nil
-	})
-	if err != nil {
-		return ProcessResult{}, err
 	}
-	return outcome, nil
+	if err != nil {
+		return err
+	}
+	after := wallet.Snapshot()
+	if err := transaction.MarkProcessed(domain.FinancialResult{Balance: after.Balance, WalletVersion: after.Version}, "", at); err != nil {
+		return err
+	}
+	if err := r.Transactions.Complete(ctx, transaction); err != nil {
+		return err
+	}
+	var entry *domain.WalletLedgerEntry
+	if c.Kind != domain.Loss {
+		if err := r.Wallets.Update(ctx, wallet, before.Version); err != nil {
+			return err
+		}
+		direction, err := transaction.Movement()
+		if err != nil {
+			return err
+		}
+		created, err := newEntry(transaction, direction, before.Balance, after.Balance, at)
+		if err != nil {
+			return err
+		}
+		if err := r.Ledger.Insert(ctx, created); err != nil {
+			return err
+		}
+		entry = &created
+	}
+	if err := recordProcessed(ctx, r, transaction, entry, c.CorrelationID, c.CausationID); err != nil {
+		return err
+	}
+	outcome.Transaction = transaction.Snapshot()
+	return nil
 }
 
 func replay(existing *domain.WagerTransaction, c ProcessCommand, hash string, outcome *ProcessResult) error {

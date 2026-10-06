@@ -1,3 +1,3 @@
-// Package workers publishes committed outbox events through an Fx-managed loop.
-// Input consumers and reference retries belong to later challenge parts.
+// Package workers manages the outbox publisher and operation consumer through Fx.
+// Reference retries belong to later challenge parts.
 package workers
