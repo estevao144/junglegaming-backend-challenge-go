@@ -56,7 +56,10 @@ func (s *FinancialService) CheckInbox(ctx context.Context) error { return s.stor
 
 // ProcessIncoming commits inbox and new financial effects together. A savepoint
 // permits a terminal rejection without retaining partial financial writes.
-func (s *FinancialService) ProcessIncoming(ctx context.Context, incoming IncomingOperation) (IncomingResult, error) {
+func (s *FinancialService) ProcessIncoming(ctx context.Context, incoming IncomingOperation) (result IncomingResult, processErr error) {
+	defer func() {
+		s.observeOperation("sqs", string(incoming.Command.Kind), result.Status, result.InboxReplay || result.FinancialReplay, processErr)
+	}()
 	for _, identity := range []string{incoming.ConsumerName, incoming.Source, incoming.MessageID, incoming.CorrelationID} {
 		if identity == "" || strings.TrimSpace(identity) != identity {
 			return IncomingResult{}, fmt.Errorf("invalid incoming transport identity")

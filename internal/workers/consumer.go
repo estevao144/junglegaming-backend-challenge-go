@@ -13,6 +13,7 @@ import (
 	"jungle-gaming/internal/application"
 	"jungle-gaming/internal/config"
 	"jungle-gaming/internal/platform/messaging"
+	"jungle-gaming/internal/platform/observability"
 	"jungle-gaming/internal/platform/postgres"
 	sqstransport "jungle-gaming/internal/transport/sqs"
 )
@@ -28,6 +29,7 @@ type IncomingService interface {
 }
 
 type OperationConsumer struct {
+	metrics    *observability.Metrics
 	queue      OperationQueue
 	service    IncomingService
 	config     config.Config
@@ -41,8 +43,9 @@ func NewOperationConsumer(queue OperationQueue, service IncomingService, c confi
 	return &OperationConsumer{queue: queue, service: service, config: c, logger: logger}
 }
 
-func RegisterConsumer(lc fx.Lifecycle, queue *messaging.Queue, service *application.AuthorizedIncomingService, c config.Config, logger *slog.Logger) *OperationConsumer {
+func RegisterConsumer(lc fx.Lifecycle, queue *messaging.Queue, service *application.AuthorizedIncomingService, c config.Config, logger *slog.Logger, metrics *observability.Metrics) *OperationConsumer {
 	consumer := NewOperationConsumer(queue, service, c, logger)
+	consumer.metrics = metrics
 	lc.Append(fx.Hook{OnStart: func(ctx context.Context) error {
 		check, cancel := context.WithTimeout(ctx, c.DependencyTimeout)
 		defer cancel()
@@ -133,12 +136,14 @@ func (c *OperationConsumer) Resolve(ctx context.Context, message types.Message) 
 }
 
 func (c *OperationConsumer) Handle(ctx context.Context, message types.Message) error {
+	started := time.Now()
 	attributes := []any{"messageId", aws.ToString(message.MessageId), "receiveCount", message.Attributes["ApproximateReceiveCount"]}
 	incoming, parseErr := sqstransport.ParseOperation(aws.ToString(message.Body), c.config.ConsumerName, c.queue.Source())
 	if parseErr == nil {
-		attributes = append(attributes, "envelopeMessageId", incoming.MessageID, "providerId", incoming.Command.ProviderID, "externalTransactionId", incoming.Command.ExternalTransactionID)
+		attributes = append(attributes, "envelopeMessageId", incoming.MessageID, "correlationId", incoming.CorrelationID, "walletId", incoming.Command.WalletID, "providerId", incoming.Command.ProviderID, "externalTransactionId", incoming.Command.ExternalTransactionID)
 	}
 	result, err := c.Resolve(ctx, message)
+	attributes = append(attributes, "latencyMicros", time.Since(started).Microseconds())
 	if err != nil {
 		classification := "transient"
 		if errors.Is(err, sqstransport.ErrPoisonMessage) || errors.Is(err, postgres.ErrInboxIdentity) {
@@ -146,6 +151,10 @@ func (c *OperationConsumer) Handle(ctx context.Context, message types.Message) e
 		}
 		attributes = append(attributes, "classification", classification)
 		c.logger.Warn("SQS operation left for redelivery", attributes...)
+		c.metrics.Worker("consumer", "retry")
+		if classification == "poison" {
+			c.metrics.Worker("consumer", "poison")
+		}
 		return err
 	}
 	if result.Status != "PROCESSED" && result.Status != "REJECTED" && result.Status != "PENDING_REFERENCE" {
@@ -156,8 +165,10 @@ func (c *OperationConsumer) Handle(ctx context.Context, message types.Message) e
 	defer cancel()
 	if err := c.queue.Delete(ack, message); err != nil {
 		c.logger.Warn("SQS durable operation acknowledgement failed", attributes...)
+		c.metrics.Worker("consumer", "ack_failed")
 		return err
 	}
 	c.logger.Info("SQS operation acknowledged after commit", attributes...)
+	c.metrics.Worker("consumer", "processed")
 	return nil
 }

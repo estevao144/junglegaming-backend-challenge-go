@@ -4,28 +4,45 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"jungle-gaming/internal/application"
 	"jungle-gaming/internal/domain"
 	"jungle-gaming/internal/platform/auth"
+	"jungle-gaming/internal/platform/observability"
 	"jungle-gaming/internal/platform/postgres"
 	"jungle-gaming/internal/security"
 )
 
 type OperationHandler struct {
 	financial *application.AuthorizedFinancialService
+	metrics   *observability.Metrics
+	log       *slog.Logger
 }
 
 func NewOperationHandler(financial *application.AuthorizedFinancialService) *OperationHandler {
-	return &OperationHandler{financial}
+	return &OperationHandler{financial: financial, metrics: observability.NewMetrics(), log: defaultHTTPLogger()}
 }
 
-// Only the submission route is added in 6A to prove authorization with real
-// financial effects. Wallet, reconciliation and the complete API belong to 6B.
 func NewAuthenticatedMux(h *Health, handler *OperationHandler, a *auth.Authenticator) *http.ServeMux {
 	mux := NewMux(h)
-	mux.Handle("POST /wagering/transactions", RequireAuthentication(a, http.HandlerFunc(handler.Process)))
+	for _, route := range []struct {
+		pattern string
+		serve   http.HandlerFunc
+	}{
+		{"POST /wagering/transactions", handler.Process},
+		{"POST /wallets", handler.OpenWallet},
+		{"GET /wallets/{walletId}", handler.GetWallet},
+		{"GET /wallets/{walletId}/ledger", handler.Ledger},
+		{"POST /wallets/{walletId}/reconciliation", handler.Reconciliation},
+		{"GET /wagering/transactions/{transactionId}", handler.Transaction},
+		{"GET /providers/{providerId}/wagering/transactions/{externalTransactionId}", handler.ExternalTransaction},
+	} {
+		mux.Handle(route.pattern, handler.Observe(RequireAuthentication(a, handler.authenticatedTrace(route.serve))))
+	}
+	// Operational metrics are public locally; deploy behind a private network.
+	mux.Handle("GET /metrics", handler.metrics)
 	return mux
 }
 
@@ -77,12 +94,12 @@ func (h *OperationHandler) Process(w http.ResponseWriter, r *http.Request) {
 	}
 	correlation := r.Header.Get("X-Correlation-ID")
 	if correlation == "" {
-		correlation = p.Subject
+		correlation = correlationID(r)
 	}
 	command := application.ProcessCommand{ProviderID: body.ProviderID, ExternalTransactionID: body.ExternalTransactionID, IdempotencyKey: r.Header.Get("Idempotency-Key"), PlayerID: body.PlayerID, WalletID: body.WalletID, RoundID: body.RoundID, GameID: body.GameID, Kind: body.Kind, Money: money, ReferenceExternalTransactionID: body.ReferenceExternalTransactionID, CorrelationID: correlation}
 	result, err := h.financial.Process(r.Context(), command)
 	if err != nil {
-		status, code := http.StatusServiceUnavailable, "unavailable"
+		status, code := http.StatusInternalServerError, "internal_error"
 		switch {
 		case errors.Is(err, security.ErrForbidden):
 			status, code = 403, "forbidden"
@@ -91,13 +108,20 @@ func (h *OperationHandler) Process(w http.ResponseWriter, r *http.Request) {
 			return
 		case errors.Is(err, postgres.ErrConflict):
 			status, code = 409, "idempotency_conflict"
+		case errors.Is(err, postgres.ErrNotFound):
+			status, code = 404, "not_found"
+		case errors.Is(err, postgres.ErrConcurrentChange):
+			status, code = 409, "concurrent_change"
 		case application.TerminalFailure(err) != "":
 			status, code = 400, "invalid_input"
+		case infrastructureUnavailable(err):
+			status, code = 503, "unavailable"
 		}
 		respond(w, status, map[string]string{"error": code})
 		return
 	}
 	state := result.Transaction
+	traceResource(r, state.Data.ProviderID, state.Data.WalletID, state.Data.ID, state.Data.ExternalTransactionID, string(state.Status))
 	response := struct {
 		TransactionID    string                   `json:"transactionId"`
 		Status           domain.TransactionStatus `json:"status"`

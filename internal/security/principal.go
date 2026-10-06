@@ -12,6 +12,14 @@ var ErrForbidden = errors.New("forbidden")
 
 const ProviderRole = "wagering-provider"
 const MessagingRole = "wagering-messaging"
+const WalletRole = "wallet-internal"
+
+func (p Principal) AuthorizeWallet() error {
+	if !p.HasRole(WalletRole) || p.HasRole(ProviderRole) || p.HasRole(MessagingRole) {
+		return ErrForbidden
+	}
+	return nil
+}
 
 type Principal struct {
 	ExpiresAt        time.Time

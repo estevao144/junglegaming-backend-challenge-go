@@ -53,16 +53,18 @@ conforme [AUTH.md](AUTH.md). O núcleo transacional e schema não mudam por aute
 - `OpenWallet(ctx, playerID, balance, correlationID)`: criação interna, versão 1.
   Zero cria somente a carteira; positivo cria também OPENING, crédito no ledger
   e dois eventos, sem elevar a versão a 2.
-- `Process(ctx, ProcessCommand)`: BET, WIN sem referência, LOSS, REFUND e ROLLBACK integrais.
+- `Process(ctx, ProcessCommand)`: BET, WIN, LOSS, REFUND e ROLLBACK integrais.
   O command preserva a chave recebida, recebe Money validado e exige correlationId.
-  WIN com referência retorna `ErrUnsupportedOperation`.
+  WIN pode referenciar BET processada do mesmo contexto, sem exigir payout igual
+  à aposta. Referência ausente também usa o worker persistente.
   REFUND resolve BET por provedor/ID externo ou persiste PENDING_REFERENCE,
   resolvido depois por ReferenceWorker. ROLLBACK usa o mesmo fluxo e persiste
   referência interna, direção inversa e resultado original; veja
   [REFERENCE_RETRY.md](REFERENCE_RETRY.md).
 - `Store.GetWallet`, `GetLedger`, `GetTransaction` e `GetExternalTransaction`
   consultam e reidratam os modelos. Consultas externas de transação filtram providerId.
-  A consulta de ledger é interna e ainda não implementa o cursor opaco da API futura.
+  LedgerPage limita a query e usa cursor opaco por wallet/created_at/id na API 6B.
+  Reconcile usa snapshot REPEATABLE READ READ ONLY e streaming por versão financeira.
 
 Os adaptadores deverão autenticar e autorizar identidades antes de chamar os casos
 de uso. OpenWallet é interno; o providerId de Process deve vir da identidade validada.

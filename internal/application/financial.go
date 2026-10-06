@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"jungle-gaming/internal/domain"
+	"jungle-gaming/internal/platform/observability"
 	"jungle-gaming/internal/platform/postgres"
 )
 
@@ -40,7 +41,10 @@ type ProcessResult struct {
 	IdempotentReplay bool
 }
 
-type FinancialService struct{ store *postgres.Store }
+type FinancialService struct {
+	store   *postgres.Store
+	metrics *observability.Metrics
+}
 
 func NewFinancialService(store *postgres.Store) *FinancialService {
 	return &FinancialService{store: store}
@@ -85,8 +89,8 @@ func eventIdentity(correlation, causation string) bool {
 	return correlation != "" && strings.TrimSpace(correlation) == correlation && (causation == "" || strings.TrimSpace(causation) == causation)
 }
 
-// OpenWallet is an internal use case. A future transport must authorize callers
-// before invoking it. A zero opening produces no financial transaction or event.
+// OpenWallet is internal: the authorized HTTP wrapper requires wallet-internal.
+// A zero opening produces no financial transaction or event.
 func (s *FinancialService) OpenWallet(ctx context.Context, playerID string, balance domain.Money, correlation string) (*domain.Wallet, error) {
 	if !eventIdentity(correlation, "") {
 		return nil, fmt.Errorf("correlationId is required")
@@ -144,9 +148,12 @@ func (s *FinancialService) OpenWallet(ctx context.Context, playerID string, bala
 	return wallet, nil
 }
 
-// Process shares one implementation for future HTTP and SQS adapters. Provider
+// Process shares one implementation for HTTP and SQS adapters. Provider
 // authentication is deliberately outside this use case and must precede it.
-func (s *FinancialService) Process(ctx context.Context, c ProcessCommand) (ProcessResult, error) {
+func (s *FinancialService) Process(ctx context.Context, c ProcessCommand) (result ProcessResult, processErr error) {
+	defer func() {
+		s.observeOperation("http", string(c.Kind), string(result.Transaction.Status), result.IdempotentReplay, processErr)
+	}()
 	transaction, hash, err := prepareOperation(c)
 	if err != nil {
 		return ProcessResult{}, err
@@ -165,7 +172,7 @@ func prepareOperation(c ProcessCommand) (*domain.WagerTransaction, string, error
 	if c.Kind != domain.Bet && c.Kind != domain.Win && c.Kind != domain.Loss && c.Kind != domain.Refund && c.Kind != domain.Rollback {
 		return nil, "", ErrUnsupportedOperation
 	}
-	if c.ReferenceExternalTransactionID != "" && c.Kind != domain.Refund && c.Kind != domain.Rollback {
+	if c.ReferenceExternalTransactionID != "" && c.Kind != domain.Win && c.Kind != domain.Refund && c.Kind != domain.Rollback {
 		return nil, "", ErrUnsupportedOperation
 	}
 	if !eventIdentity(c.CorrelationID, c.CausationID) {
@@ -231,7 +238,7 @@ func processOperation(ctx context.Context, r *postgres.Repositories, c ProcessCo
 	}
 	var referenceID string
 	var direction domain.Direction
-	if c.Kind == domain.Refund || c.Kind == domain.Rollback {
+	if c.ReferenceExternalTransactionID != "" {
 		referenceID, direction, err = prepareReversalReference(ctx, r, transaction, before, at, true)
 		if err != nil {
 			return err

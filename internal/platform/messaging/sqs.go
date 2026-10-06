@@ -2,8 +2,11 @@ package messaging
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -17,10 +20,11 @@ import (
 var Module = fx.Module("messaging", fx.Provide(New))
 
 type Queue struct {
-	client *sqs.Client
-	url    string
-	source string
-	config config.Config
+	client  *sqs.Client
+	url     string
+	source  string
+	dlqName string
+	config  config.Config
 }
 
 func New(lc fx.Lifecycle, c config.Config) *Queue {
@@ -60,6 +64,17 @@ func New(lc fx.Lifecycle, c config.Config) *Queue {
 			return fmt.Errorf("input queue must be FIFO with redrive policy")
 		}
 		q.source = attributes.Attributes["QueueArn"]
+		var redrive struct {
+			DeadLetterTargetARN string `json:"deadLetterTargetArn"`
+		}
+		if json.Unmarshal([]byte(attributes.Attributes["RedrivePolicy"]), &redrive) != nil {
+			return fmt.Errorf("invalid SQS redrive policy")
+		}
+		arnParts := strings.SplitN(redrive.DeadLetterTargetARN, ":", 6)
+		if len(arnParts) != 6 || arnParts[5] == "" {
+			return fmt.Errorf("invalid SQS DLQ identity")
+		}
+		q.dlqName = arnParts[5]
 		if q.source == "" {
 			return fmt.Errorf("input queue ARN is required for stable inbox identity")
 		}
@@ -95,4 +110,16 @@ func (q *Queue) Check(ctx context.Context) error {
 		QueueUrl: aws.String(q.url), AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
 	})
 	return err
+}
+
+func (q *Queue) DLQVisible(ctx context.Context) (int64, error) {
+	result, err := q.client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{QueueName: aws.String(q.dlqName)})
+	if err != nil {
+		return 0, err
+	}
+	attributes, err := q.client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{QueueUrl: result.QueueUrl, AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameApproximateNumberOfMessages}})
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(attributes.Attributes["ApproximateNumberOfMessages"], 10, 64)
 }

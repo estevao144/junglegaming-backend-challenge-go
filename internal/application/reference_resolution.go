@@ -36,7 +36,8 @@ func (s *FinancialService) ResolveReference(ctx context.Context, claim postgres.
 	if policy.MaxAttempts < 1 || policy.Base <= 0 || policy.Maximum < policy.Base {
 		return fmt.Errorf("invalid reference retry policy")
 	}
-	return s.store.WithTx(ctx, func(r *postgres.Repositories) error {
+	var outcome *domain.WagerTransaction
+	err := s.store.WithTx(ctx, func(r *postgres.Repositories) error {
 		observed, err := r.Transactions.Get(ctx, claim.TransactionID)
 		if err != nil {
 			return err
@@ -49,6 +50,7 @@ func (s *FinancialService) ResolveReference(ctx context.Context, claim postgres.
 		if err != nil {
 			return err
 		}
+		outcome = transaction
 		state := transaction.Snapshot()
 		if state.Status.Terminal() {
 			return nil
@@ -95,4 +97,12 @@ func (s *FinancialService) ResolveReference(ctx context.Context, claim postgres.
 		}
 		return r.ReferenceRetries.Finish(ctx, claim, 0, true)
 	})
+	if outcome != nil && s.metrics != nil {
+		state := outcome.Snapshot()
+		s.observeOperation("reference", string(state.Data.Kind), string(state.Status), false, err)
+		if err != nil || state.Status == domain.PendingReference {
+			s.metrics.Worker("reference", "retry")
+		}
+	}
+	return err
 }

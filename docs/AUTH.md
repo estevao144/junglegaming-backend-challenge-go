@@ -19,7 +19,7 @@ JWKS: `<issuer>/protocol/openid-connect/certs`.
 | provider-beta | provider-beta-local | wagering-provider; provider_id=provider-beta |
 | provider-a | provider-a-local | wagering-provider; compatibilidade com exemplos anteriores |
 | wagering-messaging | wagering-messaging-local | wagering-messaging; provider_ids=[provider-alpha, provider-beta, provider-a] |
-| wallet-internal | wallet-internal-local | wallet-internal; reservado às futuras operações internas de carteira |
+| wallet-internal | wallet-internal-local | wallet-internal; criação, consulta, ledger e reconciliação de carteiras |
 
 Clients são confidenciais, com service accounts; login humano e password grant
 estão desabilitados. O realm de testes `jungle-other` fornece um token de issuer
@@ -54,17 +54,18 @@ pública hardcoded. HTTP do IdP usa timeout e recursos encerrados pelo lifecycle
 ## Rotas e escopo
 
 `GET /health/live` e `GET /health/ready` continuam públicos.
-Foi acrescentado apenas `POST /wagering/transactions`, para demonstrar a proteção
-com processamento financeiro real. Exige Bearer, role wagering-provider e header
+`POST /wagering/transactions` exige Bearer, role wagering-provider e header
 Idempotency-Key; aceita o corpo já definido no enunciado. Money continua string
 decimal com duas casas, somente BRL. Retorna 200 processado/replay, 202 pending,
 422 rejeição de negócio, 400 entrada inválida, 409 conflito ou 503 indisponibilidade.
 O resultado contém transactionId, status, failureCode quando aplicável,
 idempotentReplay e saldo/versão originais quando presentes.
 
-Criação/consulta de carteiras, ledger paginado, consultas HTTP de transações e
-reconciliation ainda pertencem à Parte 6B. Abertura permanece um caso de uso
-interno, sem rota pública; credencial de provider não recebe essa permissão.
+A Parte 6B expõe criação/consulta de carteiras, ledger e reconciliation somente
+à role wallet-internal. Providers consultam apenas suas transações. Contratos e
+exemplos completos estão em [HTTP.md](HTTP.md). GET /metrics é público localmente;
+veja [OBSERVABILITY.md](OBSERVABILITY.md). Credencial de provider não recebe permissão
+de carteira, nem mesmo quando já operou naquela wallet.
 
 ## Mensageria e fronteira de confiança
 

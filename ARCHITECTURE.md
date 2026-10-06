@@ -1,4 +1,4 @@
-# Arquitetura — Partes 1, 2, 3, 4A, 4B, 5A, 5B e 6A
+# Arquitetura — Partes 1, 2, 3, 4A, 4B, 5A, 5B, 6A e 6B
 
 Esta entrega estrutura o serviço e implementa as invariantes locais do núcleo
 financeiro. A Parte 3 implementa persistência financeira, processamento síncrono,
@@ -22,7 +22,8 @@ Veja [docs/DOMAIN.md](docs/DOMAIN.md) para o domínio e
 | `internal/platform/logging` | Logs JSON com `log/slog` |
 | `internal/platform/postgres` | Pool pgx, lifecycle, repositories e delimitação de pgx.Tx |
 | `internal/platform/messaging` | Cliente AWS SDK v2, checks SQS e envio de snapshots |
-| `internal/transport/http` | Servidor net/http e health checks |
+| `internal/transport/http` | Servidor net/http, contratos privados, autorização, correlação e health checks |
+| `internal/platform/observability` | Métricas operacionais com labels limitados e exposição Prometheus |
 | `internal/transport/sqs` | Contrato JSON de entrada e mapping para FinancialService |
 | `internal/domain` | Money, Wallet, WagerTransaction e WalletLedgerEntry; apenas biblioteca padrão |
 | `internal/application` | Abertura, BET/WIN/LOSS/REFUND/ROLLBACK e resolução de referências, compartilhados por HTTP/SQS/worker |
@@ -119,8 +120,7 @@ Veja [OUTBOX.md](docs/OUTBOX.md) para recuperação, shutdown e testes reais.
 
 O schema reforça a associação de saldo, versão, operação e ledger, mas os casos de
 uso continuam responsáveis por criar os eventos na mesma transação. A soma do
-ledger é comparada ao saldo nos testes. Controle de acesso ao banco e reconciliação
-operacional serão complementados nas etapas futuras.
+ledger é comparada ao saldo nos testes e na reconciliação operacional da Parte 6B.
 
 ## Autenticação e autorização da Parte 6A
 
@@ -131,11 +131,11 @@ exige sub/azp/typ, respeita nbf e extrai provider_id assinado para Principal no 
 RemoteKeySet cacheia chaves e atualiza quando necessário para rotação. Nenhuma chave
 pública, token ou secret é hardcoded no código Go.
 
-POST /wagering/transactions é a única rota financeira acrescentada para validar
-autorização; health continua público. Middleware autentica; AuthorizedFinancialService
-autoriza o provider antes do caso de uso interno. Leituras do wrapper filtram provider.
-Operações internas de carteira continuam sem rota pública; wallet-internal é a role
-reservada para sua exposição futura. O domínio não depende de JWT/OIDC/Fx.
+Middleware autentica todas as rotas de negócio; AuthorizedFinancialService autoriza
+antes do caso de uso interno. Leituras de transações filtram provider autenticado.
+A Parte 6B expõe as operações de carteira somente à role wallet-internal, conforme
+README; Wallet continua global por player/currency, sem ownership artificial.
+Health e metrics são públicos localmente. O domínio não depende de JWT/OIDC/Fx.
 
 SQS mantém AWS/SigV4 e policies mínimas versionadas para produtor e consumer/publisher.
 O consumer usa adicionalmente wagering-messaging, autenticado no IdP, com role própria
@@ -147,20 +147,19 @@ Decisões, fronteiras de confiança e testes estão em [AUTH.md](docs/AUTH.md).
 
 ## Limitações e trabalho pendente
 
-Health checks públicos e uma rota de envio de operações protegida por OIDC estão
-registrados. Tokens reais de providers distintos, isolamento e assinatura inválida
-são testados com Keycloak. A API final de consultas/carteiras/reconciliation não
-faz parte desta etapa.
+Os endpoints obrigatórios estão registrados, com OAuth2/OIDC real nas rotas privadas.
+Provider não recebe permissão para criar/consultar carteira: essa restrição do README
+prevalece sobre o exemplo do prompt 6B. Detalhes em [HTTP.md](docs/HTTP.md).
 
 As entidades, schema, repositories e casos de uso desta etapa estão implementados.
-WIN com referência ainda retorna ErrUnsupportedOperation.
+WIN aceita referência opcional a BET no mesmo contexto, com payout independente,
+validação de domínio e reutilização do worker durável quando a referência está ausente.
 REFUND e ROLLBACK são resolvidos por provedor/ID externo,
 com ID interno persistido, lock da carteira e índice único contra dupla devolução.
 Referência ausente gera PENDING_REFERENCE durável, sem movimento. Replay não
 resolve a pendência; ReferenceWorker faz isso separadamente. Detalhes em
 [REFERENCES.md](docs/REFERENCES.md) e [REFERENCE_RETRY.md](docs/REFERENCE_RETRY.md).
-Faltam a API HTTP completa, reconciliação com cursor, métricas e comprovação de
-enforcement IAM no broker local. Publisher, consumer e ReferenceWorker estão
+Permanece pendente comprovar enforcement IAM no broker local. Publisher, consumer e ReferenceWorker estão
 implementados e testados. Inbox usa chave consumer/QueueArn/messageId do envelope
 e hash de corpo separado do hash financeiro. FinancialService compartilha seu
 fluxo interno entre Process e ProcessIncoming; savepoint permite registrar erro
@@ -168,6 +167,24 @@ terminal sem deixar escritas parciais. Inbox e financeiro compartilham COMMIT;
 DeleteMessage vem depois. Recuperação e DLQ estão em [INBOX.md](docs/INBOX.md).
 Inbox pode confirmar entrega com referência pendente; sua resolução imutável não
 impede a transição financeira posterior realizada pelo worker.
+
+## Leituras e observabilidade da Parte 6B
+
+Ledger usa query limitada e cursor opaco por wallet/created_at/id com índice existente.
+Reconciliação usa REPEATABLE READ READ ONLY para wallet e ledger, com leitura streaming
+na ordem das versões financeiras: verifica a cadeia e reconstrói créditos menos débitos,
+incluindo OPENING. Não bloqueia escritores nem corrige divergências. Diferença e cadeia
+inconsistente são observáveis na resposta, log e métrica. Constraints de wallet/opening
+já satisfazem a etapa; nenhuma migration antiga foi alterada e não há nova migration.
+
+Metrics é uma instância por processo, composta por Fx, sem estado financeiro/global lock.
+Contadores e histogramas usam inteiros, labels limitados, sem IDs; não há dependência nova.
+Um sampler cancelável coleta idade da outbox e estoque aproximado visível da DLQ a cada
+15 segundos; scrapes só leem memória. Falhas mantêm o valor anterior e expõem disponibilidade.
+Readiness verifica PostgreSQL/SQS, como exige o README, sem publicação ou token por probe.
+OIDC é validado no startup e durante autenticação. HTTP gera/propaga correlation ID separado
+de idempotência; logs registram somente metadados e tempos. Sem tracing/Grafana/load tests.
+Contrato e semântica exata das métricas estão em [OBSERVABILITY.md](docs/OBSERVABILITY.md).
 
 As imagens Docker têm tags fixas; o ambiente local usa credenciais de exemplo.
 O volume PostgreSQL preserva dados; a infraestrutura Keycloak e as filas são

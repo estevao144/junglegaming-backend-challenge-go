@@ -1,11 +1,12 @@
-# Execução das Partes 1, 2, 3, 4A, 4B, 5A, 5B e 6A
+# Execução das Partes 1, 2, 3, 4A, 4B, 5A, 5B, 6A e 6B
 
 ## Pré-requisitos
 
 Go 1.26.0 ou superior, Docker com Docker Compose v2. Para `go test -race`,
 habilite CGO e tenha um compilador C disponível (no Windows, GCC compatível).
 O Dockerfile compila com Go 1.26.0; `go.mod` declara a mesma versão mínima.
-Os checks locais desta entrega foram executados com Go 1.27.1 no Windows.
+Os checks completos da Parte 6B foram executados com Go 1.26.0/GCC em Linux Docker;
+checks unitários também foram executados no Windows com Go 1.27.1.
 
 ## Ambiente completo
 
@@ -114,11 +115,11 @@ A API não provisiona infraestrutura nem aplica migrations.
 
 O realm `jungle` é importado automaticamente em um container novo.
 Console: `http://localhost:8081`, administrador `admin` / `admin-local`.
-Há dois clients confidenciais de teste com service accounts:
+Clients confidenciais com service accounts incluem:
 
 | Client | Secret local | Role / claim |
 | --- | --- | --- |
-| `provider-a` | `provider-a-local` | `provider`, `providerId=provider-a` |
+| `provider-a` | `provider-a-local` | `wagering-provider`, `provider_id=provider-a` |
 | `wallet-internal` | `wallet-internal-local` | `wallet-internal` |
 
 Os tokens têm audience `jungle-api`. Exemplo de obtenção de token:
@@ -129,8 +130,8 @@ curl -X POST http://localhost:8081/realms/jungle/protocol/openid-connect/token \
   -d 'grant_type=client_credentials&client_id=provider-a&client_secret=provider-a-local'
 ```
 
-Esse comando testa o IdP. A validação desses tokens e a autorização na API serão
-implementadas antes de expor endpoints de negócio. As credenciais são exemplos
+Esse comando obtém token real usado pela API. Consulte [HTTP.md](HTTP.md) para
+o fluxo completo com provider-alpha e wallet-internal. As credenciais são exemplos
 exclusivos de desenvolvimento. Keycloak usa `start-dev` com seu banco de desenvolvimento.
 
 ## Verificação
@@ -161,16 +162,15 @@ Para verificar startup, readiness e shutdown com PostgreSQL e SQS reais:
 2. Importe `.env` conforme descrito acima.
 3. Execute `go test -tags=integration ./...` ou `go test -race -tags=integration ./...`.
 
-O teste de integração atual não testa OIDC, persistência financeira ou consumo
-de mensagens. Testes com três processos, interrupções, idempotência, autenticação
-e concorrência financeira serão adicionados nas respectivas etapas.
+As integrações cobrem OIDC real, HTTP, persistência financeira, três processos,
+idempotência, referências, inbox/outbox, SQS/DLQ, reconciliação e métricas.
 
 ## Migrations e testes financeiros
 
 Com DATABASE_URL definido, execute `go run ./cmd/migrate up`. A reversão
 `go run ./cmd/migrate down` remove as tabelas financeiras e seus dados.
 
-Para testes reais, prepare somente o PostgreSQL, defina TEST_DATABASE_URL e rode
-`go test -tags=integration ./internal/application`. Esses testes são independentes
-de SQS e Keycloak. Para testes com -race no container Go e detalhes do schema,
+Para a suíte completa, prepare PostgreSQL, SQS e Keycloak, defina TEST_DATABASE_URL,
+TEST_SQS_ENDPOINT e as variáveis OIDC/mensageria indicadas em [AUTH.md](AUTH.md).
+Execute `go test -race -tags=integration -count=1 ./...`. Para testes com -race no container Go e detalhes do schema,
 consulte [POSTGRES.md](POSTGRES.md) e [migrations/README.md](../migrations/README.md).

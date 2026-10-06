@@ -25,6 +25,7 @@ import (
 	"jungle-gaming/internal/config"
 	"jungle-gaming/internal/domain"
 	"jungle-gaming/internal/platform/messaging"
+	"jungle-gaming/internal/platform/observability"
 	"jungle-gaming/internal/platform/postgres"
 	"jungle-gaming/internal/workers"
 	"jungle-gaming/migrations"
@@ -67,7 +68,7 @@ func newEventQueue(t *testing.T, f fixture) eventQueue {
 	c := config.Config{DatabaseURL: f.url, AWSRegion: "us-east-1", SQSEndpoint: endpoint, SQSEventsQueueName: name, DependencyTimeout: 3 * time.Second,
 		OutboxBatchSize: 4, OutboxPollInterval: 10 * time.Millisecond, OutboxLease: 10 * time.Second, OutboxRetryBase: 200 * time.Millisecond, OutboxRetryMax: time.Second}
 	var publisher *messaging.EventPublisher
-	app := fx.New(fx.NopLogger, fx.Supply(c), fx.Provide(messaging.NewEventPublisher), fx.Populate(&publisher))
+	app := fx.New(fx.NopLogger, fx.Provide(observability.NewMetrics), fx.Supply(c), fx.Provide(messaging.NewEventPublisher), fx.Populate(&publisher))
 	if err := app.Start(f.ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +449,7 @@ func TestOutboxFxLifecycle(t *testing.T) {
 	q := newEventQueue(t, f)
 	open(t, f, "fx-player", "1.00")
 	var db *postgres.Database
-	app := fx.New(fx.NopLogger, fx.Supply(q.config, outboxLogger()), postgres.Module, workers.Module, fx.Populate(&db))
+	app := fx.New(fx.NopLogger, fx.Provide(observability.NewMetrics), fx.Supply(q.config, outboxLogger()), postgres.Module, workers.Module, fx.Populate(&db))
 	if err := app.Start(f.ctx); err != nil {
 		t.Fatal(err)
 	}

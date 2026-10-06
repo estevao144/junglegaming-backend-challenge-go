@@ -24,6 +24,7 @@ import (
 	"jungle-gaming/internal/domain"
 	"jungle-gaming/internal/platform/auth"
 	"jungle-gaming/internal/platform/messaging"
+	"jungle-gaming/internal/platform/observability"
 	"jungle-gaming/internal/platform/postgres"
 	sqstransport "jungle-gaming/internal/transport/sqs"
 	"jungle-gaming/internal/workers"
@@ -82,7 +83,7 @@ func newOperationQueue(t *testing.T, f fixture) operationQueue {
 	c := config.Config{DatabaseURL: f.url, AWSRegion: "us-east-1", SQSEndpoint: endpoint, SQSQueueName: name + ".fifo", DependencyTimeout: 3 * time.Second,
 		ConsumerName: "financial-operations-v1", ConsumerConcurrency: 2, ConsumerBatchSize: 1, ConsumerWaitSeconds: 1, ConsumerVisibilitySeconds: 1, ConsumerProcessTimeout: 3 * time.Second}
 	var queue *messaging.Queue
-	app := fx.New(fx.NopLogger, fx.Supply(c), messaging.Module, fx.Populate(&queue))
+	app := fx.New(fx.NopLogger, fx.Provide(observability.NewMetrics), fx.Supply(c), messaging.Module, fx.Populate(&queue))
 	if err := app.Start(f.ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +388,7 @@ func TestInboxFxConsumersIndependentWallets(t *testing.T) {
 	q.config.OIDCAudience = os.Getenv("OIDC_AUDIENCE")
 	q.config.MessagingClientID = os.Getenv("MESSAGING_CLIENT_ID")
 	q.config.MessagingClientSecret = os.Getenv("MESSAGING_CLIENT_SECRET")
-	app := fx.New(fx.NopLogger, fx.Supply(q.config, q.queue, outboxLogger()), postgres.Module, auth.Module, fx.Provide(postgres.NewStore, application.NewFinancialService, application.NewAuthorizedIncomingService), workers.ConsumerModule, fx.Populate(&db))
+	app := fx.New(fx.NopLogger, fx.Provide(observability.NewMetrics), fx.Supply(q.config, q.queue, outboxLogger()), postgres.Module, auth.Module, fx.Provide(postgres.NewStore, application.NewFinancialService, application.NewAuthorizedIncomingService), workers.ConsumerModule, fx.Populate(&db))
 	if err := app.Start(f.ctx); err != nil {
 		t.Fatal(err)
 	}

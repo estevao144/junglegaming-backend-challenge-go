@@ -9,6 +9,7 @@ import (
 	"go.uber.org/fx"
 	"jungle-gaming/internal/application"
 	"jungle-gaming/internal/config"
+	"jungle-gaming/internal/platform/observability"
 	"jungle-gaming/internal/platform/postgres"
 )
 
@@ -21,6 +22,7 @@ type ReferenceResolver interface {
 }
 
 type ReferenceWorker struct {
+	metrics *observability.Metrics
 	queue   ReferenceClaimer
 	service ReferenceResolver
 	config  config.Config
@@ -33,8 +35,9 @@ func NewReferenceWorker(queue ReferenceClaimer, service ReferenceResolver, c con
 	return &ReferenceWorker{queue: queue, service: service, config: c, logger: logger}
 }
 
-func RegisterReference(lc fx.Lifecycle, queue *postgres.ReferenceQueue, service *application.FinancialService, c config.Config, logger *slog.Logger) *ReferenceWorker {
+func RegisterReference(lc fx.Lifecycle, queue *postgres.ReferenceQueue, service *application.FinancialService, c config.Config, logger *slog.Logger, metrics *observability.Metrics) *ReferenceWorker {
 	w := NewReferenceWorker(queue, service, c, logger)
+	w.metrics = metrics
 	lc.Append(fx.Hook{OnStart: func(ctx context.Context) error {
 		check, cancel := context.WithTimeout(ctx, c.DependencyTimeout)
 		defer cancel()
@@ -101,8 +104,15 @@ func (w *ReferenceWorker) RunOnce(ctx context.Context) (int, error) {
 			break
 		}
 		resolveCtx, cancel := context.WithTimeout(ctx, w.config.ReferenceProcessTimeout)
+		started := time.Now()
 		err := w.service.ResolveReference(resolveCtx, claim, policy)
 		cancel()
+		if err == nil {
+			w.metrics.Worker("reference", "attempt_complete")
+			w.logger.Info("reference attempt completed", "transactionId", claim.TransactionID, "latencyMicros", time.Since(started).Microseconds())
+		} else {
+			w.metrics.Worker("reference", "error")
+		}
 		if err != nil && !errors.Is(err, postgres.ErrReferenceClaimLost) {
 			w.logger.Warn("reference resolution failed; lease will recover", "transactionId", claim.TransactionID)
 			batchErr = errors.Join(batchErr, err)

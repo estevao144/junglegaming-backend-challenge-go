@@ -9,8 +9,9 @@ import (
 	"jungle-gaming/internal/platform/postgres"
 )
 
-// prepareReversalReference runs under the wallet lock. Missing references enter
-// pending only on the original request, never on retries of that same transaction.
+// prepareReversalReference validates reversals and the optional WIN reference
+// under the wallet lock. Missing references enter pending only on the original
+// request, never on retries of that same transaction.
 func prepareReversalReference(ctx context.Context, r *postgres.Repositories, transaction *domain.WagerTransaction, wallet domain.WalletState, at time.Time, enterPending bool) (string, domain.Direction, error) {
 	data := transaction.Snapshot().Data
 	reference, err := r.Transactions.Reference(ctx, data.ProviderID, data.ReferenceExternalTransactionID)
@@ -42,7 +43,10 @@ func prepareReversalReference(ctx context.Context, r *postgres.Repositories, tra
 	}
 	state := reference.Snapshot()
 	failure := transaction.ReversalReferenceFailure(state)
-	if failure == "" {
+	if data.Kind == domain.Win {
+		failure = transaction.WinReferenceFailure(state)
+	}
+	if failure == "" && data.Kind != domain.Win {
 		reversed, err := r.Transactions.HasProcessedReversal(ctx, state.Data.ID)
 		if err != nil {
 			return "", "", err
@@ -60,6 +64,9 @@ func prepareReversalReference(ctx context.Context, r *postgres.Repositories, tra
 			return "", "", err
 		}
 		return state.Data.ID, "", recordRejected(ctx, r, transaction, data.CorrelationID, data.CausationID)
+	}
+	if data.Kind == domain.Win {
+		return state.Data.ID, domain.CreditDirection, nil
 	}
 	direction, err := transaction.ReversalMovement(state)
 	return state.Data.ID, direction, err

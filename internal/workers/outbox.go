@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"go.uber.org/fx"
 	"jungle-gaming/internal/config"
 	"jungle-gaming/internal/platform/messaging"
+	"jungle-gaming/internal/platform/observability"
 	"jungle-gaming/internal/platform/postgres"
 )
 
@@ -26,6 +28,7 @@ type Publisher interface {
 }
 
 type OutboxWorker struct {
+	metrics    *observability.Metrics
 	repository DeliveryRepository
 	publisher  Publisher
 	config     config.Config
@@ -40,8 +43,9 @@ func NewOutboxWorker(repository DeliveryRepository, publisher Publisher, c confi
 }
 
 // Concrete dependencies ensure Fx stops this hook before closing SQS and PG.
-func RegisterOutbox(lc fx.Lifecycle, repository *postgres.OutboxDelivery, publisher *messaging.EventPublisher, c config.Config, logger *slog.Logger) *OutboxWorker {
+func RegisterOutbox(lc fx.Lifecycle, repository *postgres.OutboxDelivery, publisher *messaging.EventPublisher, c config.Config, logger *slog.Logger, metrics *observability.Metrics) *OutboxWorker {
 	w := NewOutboxWorker(repository, publisher, c, logger)
+	w.metrics = metrics
 	lc.Append(fx.Hook{OnStart: func(ctx context.Context) error {
 		checkCtx, cancel := context.WithTimeout(ctx, c.DependencyTimeout)
 		defer cancel()
@@ -119,6 +123,7 @@ func (w *OutboxWorker) runBatch(claims, work context.Context) (int, error) {
 	events, err := w.repository.Claim(ctx, w.config.OutboxBatchSize, w.config.OutboxLease)
 	cancel()
 	if err != nil {
+		w.metrics.Worker("outbox", "error")
 		return 0, err
 	}
 	for _, event := range events {
@@ -131,13 +136,27 @@ func (w *OutboxWorker) runBatch(claims, work context.Context) (int, error) {
 }
 
 func (w *OutboxWorker) deliver(ctx context.Context, event postgres.ClaimedEvent) {
-	attributes := []any{"eventId", event.EventID, "eventType", event.EventType, "attempt", int64(event.Attempts) + 1}
+	started := time.Now()
+	var metadata struct {
+		CorrelationID string `json:"correlationId"`
+		Data          struct {
+			TransactionID         string `json:"transactionId"`
+			ProviderID            string `json:"providerId"`
+			ExternalTransactionID string `json:"externalTransactionId"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(event.Payload, &metadata)
+	attributes := []any{"eventId", event.EventID, "walletId", event.WalletID, "correlationId", metadata.CorrelationID, "transactionId", metadata.Data.TransactionID, "providerId", metadata.Data.ProviderID, "externalTransactionId", metadata.Data.ExternalTransactionID, "eventType", event.EventType, "attempt", int64(event.Attempts) + 1}
+	defer func() {
+		w.logger.Debug("outbox delivery completed", "eventId", event.EventID, "latencyMicros", time.Since(started).Microseconds())
+	}()
 	w.logger.Debug("outbox claimed", attributes...)
 	renewCtx, cancel := context.WithTimeout(ctx, w.config.DependencyTimeout)
 	err := w.repository.Renew(renewCtx, event, w.config.OutboxLease)
 	cancel()
 	if err != nil {
 		w.logger.Warn("outbox claim unavailable", attributes...)
+		w.metrics.Worker("outbox", "claim_lost")
 		return
 	}
 	sendCtx, cancel := context.WithTimeout(ctx, w.config.DependencyTimeout)
@@ -153,15 +172,19 @@ func (w *OutboxWorker) deliver(ctx context.Context, event postgres.ClaimedEvent)
 		}
 		attributes = append(attributes, "retryAfter", delay.String())
 		w.logger.Warn("outbox send failed; retry scheduled", attributes...)
+		w.metrics.Worker("outbox", "retry")
 		return
 	}
 	if err := w.repository.MarkPublished(updateCtx, event); err != nil {
 		if errors.Is(err, postgres.ErrClaimLost) {
+			w.metrics.Worker("outbox", "claim_lost")
 			w.logger.Warn("outbox sent but claim lost", attributes...)
 		} else {
+			w.metrics.Worker("outbox", "error")
 			w.logger.Warn("outbox sent but confirmation failed", attributes...)
 		}
 		return
 	}
 	w.logger.Info("outbox published", attributes...)
+	w.metrics.Worker("outbox", "published")
 }

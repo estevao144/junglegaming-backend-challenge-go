@@ -64,4 +64,4 @@ func respond(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-var Module = fx.Module("http", fx.Provide(NewHealth, NewAuthenticatedMux, NewOperationHandler, NewServer), fx.Invoke(func(*Server) {}))
+var Module = fx.Module("http", fx.Provide(NewHealth, NewAuthenticatedMux, NewObservedOperationHandler, NewServer), fx.Invoke(func(*Server) {}))

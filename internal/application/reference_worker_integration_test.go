@@ -17,6 +17,7 @@ import (
 	"jungle-gaming/internal/application"
 	"jungle-gaming/internal/config"
 	"jungle-gaming/internal/domain"
+	"jungle-gaming/internal/platform/observability"
 	"jungle-gaming/internal/platform/postgres"
 	"jungle-gaming/internal/workers"
 	"jungle-gaming/migrations"
@@ -386,7 +387,7 @@ func startReferenceGraph(t *testing.T, connection string) (*fx.App, instance) {
 	t.Helper()
 	var node instance
 	c := referenceConfig(connection)
-	graph := fx.New(fx.NopLogger, fx.Supply(c, outboxLogger()), postgres.Module,
+	graph := fx.New(fx.NopLogger, fx.Provide(observability.NewMetrics), fx.Supply(c, outboxLogger()), postgres.Module,
 		fx.Provide(postgres.NewStore, application.NewFinancialService), workers.ReferenceModule,
 		fx.Populate(&node.service, &node.store, &node.database))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
