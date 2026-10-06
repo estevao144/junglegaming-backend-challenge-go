@@ -65,17 +65,6 @@ func TestWalletMovements(t *testing.T) {
 	if w.Snapshot().Balance.MinorUnits() != 0 {
 		t.Fatal("exact balance debit must be accepted")
 	}
-	before := w.Snapshot()
-	zero := mustMoney(t, "0.00", "BRL")
-	if err := w.Credit(zero, testTime().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Debit(zero, testTime().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	if w.Snapshot() != before {
-		t.Fatal("zero movement changed wallet")
-	}
 }
 
 func TestWalletRejectedMovementsDoNotMutate(t *testing.T) {
@@ -90,6 +79,8 @@ func TestWalletRejectedMovementsDoNotMutate(t *testing.T) {
 		{"currency debit", foreignMoneyForTest(100), true, testTime(), ErrCurrencyMismatch},
 		{"currency credit", foreignMoneyForTest(100), false, testTime(), ErrCurrencyMismatch},
 		{"uninitialized", Money{}, false, testTime(), ErrInvalidCurrency},
+		{"zero credit", mustUnits(t, 0), false, testTime().Add(time.Hour), ErrInvalidMoney},
+		{"zero debit", mustUnits(t, 0), true, testTime().Add(time.Hour), ErrInvalidMoney},
 		{"negative credit", mustUnits(t, -1), false, testTime(), ErrInvalidMoney},
 		{"negative debit", mustUnits(t, -1), true, testTime(), ErrInvalidMoney},
 		{"missing time", mustUnits(t, 1), false, time.Time{}, ErrInvalidWallet},

@@ -28,6 +28,19 @@ const (
 
 func (s TransactionStatus) Terminal() bool { return s == Processed || s == Rejected || s == Failed }
 
+// canTransitionTo defines the complete state machine. Unlisted transitions,
+// including self-transitions and transitions from terminal states, are rejected.
+func (s TransactionStatus) canTransitionTo(next TransactionStatus) bool {
+	switch s {
+	case Pending:
+		return next == PendingReference || next == Processed || next == Rejected || next == Failed
+	case PendingReference:
+		return next == Processed || next == Rejected || next == Failed
+	default:
+		return false
+	}
+}
+
 type FailureCode string
 
 const (
@@ -237,10 +250,10 @@ func (t *WagerTransaction) transition(state WagerTransactionState, at time.Time)
 	if err := validateTransactionState(t.state); err != nil {
 		return err
 	}
-	if t.state.Status.Terminal() {
-		return fmt.Errorf("%w: terminal transaction", ErrInvalidTransition)
+	if !t.state.Status.canTransitionTo(state.Status) {
+		return fmt.Errorf("%w: %s -> %s", ErrInvalidTransition, t.state.Status, state.Status)
 	}
-	if state.Status == t.state.Status || at.IsZero() || at.Before(t.state.UpdatedAt) {
+	if at.IsZero() || at.Before(t.state.UpdatedAt) {
 		return ErrInvalidTransition
 	}
 	state.UpdatedAt = at.UTC()

@@ -142,8 +142,18 @@ func TestOpeningTransaction(t *testing.T) {
 }
 
 func TestTransactionTransitions(t *testing.T) {
-	for _, initial := range []TransactionStatus{Pending, PendingReference, Processed, Rejected, Failed} {
-		for _, target := range []TransactionStatus{PendingReference, Processed, Rejected, Failed} {
+	for _, test := range []struct {
+		initial        TransactionStatus
+		allowedTargets []TransactionStatus
+	}{
+		{Pending, []TransactionStatus{PendingReference, Processed, Rejected, Failed}},
+		{PendingReference, []TransactionStatus{Processed, Rejected, Failed}},
+		{Processed, nil},
+		{Rejected, nil},
+		{Failed, nil},
+	} {
+		initial := test.initial
+		for _, target := range []TransactionStatus{Pending, PendingReference, Processed, Rejected, Failed, "UNKNOWN"} {
 			t.Run(string(initial)+" to "+string(target), func(t *testing.T) {
 				tx := mustTransaction(t, Refund)
 				at := testTime().Add(time.Second)
@@ -177,8 +187,20 @@ func TestTransactionTransitions(t *testing.T) {
 					err = tx.Reject(FailureReferenceNotFound, nil, at)
 				case Failed:
 					err = tx.Fail(at)
+				default:
+					candidate := tx.Snapshot()
+					candidate.Status = target
+					candidate.Result = nil
+					candidate.FailureCode = ""
+					candidate.ReferenceTransactionID = ""
+					err = tx.transition(candidate, at)
 				}
-				valid := !initial.Terminal() && initial != target
+				valid := false
+				for _, allowed := range test.allowedTargets {
+					if target == allowed {
+						valid = true
+					}
+				}
 				if valid {
 					if err != nil {
 						t.Fatal(err)
@@ -196,6 +218,27 @@ func TestTransactionTransitions(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestLossProcessingDoesNotMoveWallet(t *testing.T) {
+	wallet := mustWallet(t, "100.00")
+	before := wallet.Snapshot()
+	tx := mustTransaction(t, Loss)
+	direction, err := tx.Movement()
+	if err != nil || direction != NoMovement {
+		t.Fatalf("LOSS movement = %s, %v", direction, err)
+	}
+	// LOSS only records the outcome; it must not call Wallet.Credit or Wallet.Debit.
+	result := FinancialResult{Balance: before.Balance, WalletVersion: before.Version}
+	if err := tx.MarkProcessed(result, "", testTime().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if wallet.Snapshot() != before {
+		t.Fatal("LOSS changed wallet balance, version or timestamps")
+	}
+	if state := tx.Snapshot(); state.Status != Processed || *state.Result != result {
+		t.Fatal("LOSS did not preserve the financial result")
 	}
 }
 

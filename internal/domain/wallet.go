@@ -66,14 +66,11 @@ func (w *Wallet) move(money Money, at time.Time, debit bool) error {
 	if err := w.state.Balance.compatible(money); err != nil {
 		return err
 	}
-	if money.MinorUnits() < 0 {
-		return fmt.Errorf("%w: negative movement", ErrInvalidMoney)
+	if money.MinorUnits() <= 0 {
+		return fmt.Errorf("%w: movement must be positive", ErrInvalidMoney)
 	}
 	if at.IsZero() || at.Before(w.state.UpdatedAt) {
 		return fmt.Errorf("%w: movement timestamp precedes current state", ErrInvalidWallet)
-	}
-	if money.MinorUnits() == 0 {
-		return nil
 	}
 	if w.state.Version == math.MaxInt64 {
 		return ErrOverflow

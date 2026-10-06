@@ -55,10 +55,11 @@ sem executar crédito, débito ou emissão de eventos.
 
 `Credit(money, at)` e `Debit(money, at)` alteram somente o estado privado. Ambos
 validam carteira, moeda, valor, timestamp e overflow antes de qualquer mutação.
-Débito exige saldo suficiente. Crédito/débito zero são no-op: não alteram saldo,
-versão nem `updatedAt`, mas ainda validam entrada e timestamp.
-Essa é a interpretação escolhida para a regra de incremento apenas quando há
-mudança financeira. Valores negativos nunca são movimentos válidos.
+Débito exige saldo suficiente. Crédito e débito exigem valor estritamente positivo:
+zero e valores negativos retornam `ErrInvalidMoney`, sem alterar saldo, versão ou
+`updatedAt`. Saldo inicial zero continua permitido na criação da carteira.
+LOSS não chama `Credit` ou `Debit`: registra somente o resultado da transação,
+preservando o saldo, a versão e os timestamps da carteira.
 
 `WalletState` e `Snapshot()` são cópias para leitura e futura persistência.
 Alterar o snapshot não altera a entidade. Versões são `int64`, positivas e com
@@ -107,6 +108,11 @@ Saldo inicial zero não deve chamar esse construtor nem criar lançamento financ
 | PROCESSED / REJECTED / FAILED | Nenhum |
 
 Métodos: `MarkPendingReference`, `MarkProcessed`, `Reject`, `Fail`.
+Toda mudança passa por `TransactionStatus.canTransitionTo`, que declara
+explicitamente os destinos permitidos por estado. Autotransições, estados de
+destino desconhecidos e qualquer transição a partir de um terminal são rejeitados
+com `ErrInvalidTransition`. Os testes cobrem cada par de origem/destino, incluindo
+retorno a PENDING e destinos desconhecidos, sem alterar o estado nas rejeições.
 Entrar em espera exige referência externa. Não há transição de espera de volta
 para PENDING; retries mantêm a espera até resultado definitivo.
 Processamento com referência externa exige registrar também a identidade interna
