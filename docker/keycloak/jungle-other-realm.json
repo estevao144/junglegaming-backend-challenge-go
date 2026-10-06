@@ -1,0 +1,69 @@
+{
+    "realm":  "jungle-other",
+    "users":  [
+                  {
+                      "username":  "service-account-provider-alpha",
+                      "serviceAccountClientId":  "provider-alpha",
+                      "realmRoles":  [
+                                         "wagering-provider"
+                                     ],
+                      "enabled":  true
+                  }
+              ],
+    "roles":  {
+                  "realm":  [
+                                {
+                                    "name":  "wagering-provider"
+                                }
+                            ]
+              },
+    "clients":  [
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "provider-alpha",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "jungle-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-hardcoded-claim-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "provider-identity",
+                                                    "config":  {
+                                                                   "jsonType.label":  "String",
+                                                                   "claim.value":  "provider-alpha",
+                                                                   "claim.name":  "provider_id",
+                                                                   "id.token.claim":  "false",
+                                                                   "access.token.claim":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "provider-alpha-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    }
+                ],
+    "enabled":  true
+}

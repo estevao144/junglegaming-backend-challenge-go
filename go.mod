@@ -6,8 +6,11 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.9
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.38.0
+	github.com/coreos/go-oidc/v3 v3.17.0
+	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/jackc/pgx/v5 v5.7.6
 	go.uber.org/fx v1.24.0
+	golang.org/x/oauth2 v0.36.0
 )
 
 require (

@@ -1,4 +1,4 @@
-# Execução das Partes 1, 2, 3, 4A, 4B, 5A e 5B
+# Execução das Partes 1, 2, 3, 4A, 4B, 5A, 5B e 6A
 
 ## Pré-requisitos
 
@@ -12,7 +12,7 @@ Os checks locais desta entrega foram executados com Go 1.27.1 no Windows.
 A Parte 5B acrescenta a migration 0005, ROLLBACK e ReferenceWorker;
 veja [REFERENCE_RETRY.md](REFERENCE_RETRY.md). Aplique UP antes de iniciar a API.
 
-Em checkout limpo, primeiro execute `docker compose up -d --wait postgres localstack`,
+Em checkout limpo, primeiro execute `docker compose up -d --wait postgres localstack keycloak`,
 configure DATABASE_URL e aplique `go run ./cmd/migrate up`. Em seguida:
 
 ```sh
@@ -21,7 +21,8 @@ docker compose up --build
 
 São iniciados API (8080), PostgreSQL (5432), LocalStack (4566) e Keycloak (8081).
 PostgreSQL e as filas precisam estar disponíveis antes de a API iniciar.
-Keycloak pode terminar de iniciar depois da API: a Parte 1 ainda não valida tokens.
+Compose espera Keycloak saudável; a API valida discovery e a credencial de mensageria
+no startup. Configuração e exemplos autenticados estão em [AUTH.md](AUTH.md).
 
 O script da imagem LocalStack cria automaticamente:
 
@@ -46,7 +47,8 @@ docker compose down
 Liveness retorna `200 {"status":"ok"}` sem consultar dependências.
 Readiness retorna `200 {"postgres":"ok","sqs":"ok"}` quando ambas respondem,
 ou `503` com `unavailable` na dependência que falhou. As respostas não expõem
-erros de conexão ou credenciais. Não existem endpoints financeiros nesta etapa.
+erros de conexão ou credenciais. POST /wagering/transactions exige Bearer e provider
+autorizado; demais endpoints financeiros ficam para a Parte 6B.
 
 ## API fora do Docker
 
@@ -90,7 +92,11 @@ de `.env.example` são para execução no host.
 | `SQS_ENDPOINT` | Vazio usa AWS; localmente `http://localhost:4566` |
 | `SQS_QUEUE_NAME` | `wager-transactions.fifo` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Cadeia padrão do AWS SDK; `test` para LocalStack |
-| `OIDC_ISSUER_URL` | Reservada para futura integração OIDC; ainda não é lida |
+| `OIDC_ISSUER_URL` | Obrigatória; issuer exato do realm operacional |
+| `OIDC_AUDIENCE` | Obrigatória; exemplo local jungle-api |
+| `OIDC_INTERNAL_URL` | Opcional; origem interna do IdP na rede Docker |
+| `MESSAGING_CLIENT_ID` | Obrigatória; wagering-messaging local |
+| `MESSAGING_CLIENT_SECRET` | Obrigatória; secret somente DEV em .env.example |
 | `REFERENCE_BATCH_SIZE` | `5`; de 1 a 20 |
 | `REFERENCE_POLL_INTERVAL` | `1s` |
 | `REFERENCE_LEASE` | `30s`; maior que lote × timeout de resolução + DEPENDENCY_TIMEOUT |

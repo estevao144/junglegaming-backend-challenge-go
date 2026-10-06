@@ -22,6 +22,7 @@ import (
 	"jungle-gaming/internal/application"
 	"jungle-gaming/internal/config"
 	"jungle-gaming/internal/domain"
+	"jungle-gaming/internal/platform/auth"
 	"jungle-gaming/internal/platform/messaging"
 	"jungle-gaming/internal/platform/postgres"
 	sqstransport "jungle-gaming/internal/transport/sqs"
@@ -381,7 +382,12 @@ func TestInboxFxConsumersIndependentWallets(t *testing.T) {
 		sendOperation(t, f, q, operationBody(t, command(t, w, domain.Bet, "25.00", id), id), w.Snapshot().ID, id)
 	}
 	var db *postgres.Database
-	app := fx.New(fx.NopLogger, fx.Supply(q.config, q.queue, outboxLogger()), postgres.Module, fx.Provide(postgres.NewStore, application.NewFinancialService), workers.ConsumerModule, fx.Populate(&db))
+	q.config.OIDCIssuerURL = os.Getenv("OIDC_ISSUER_URL")
+	q.config.OIDCInternalURL = os.Getenv("OIDC_INTERNAL_URL")
+	q.config.OIDCAudience = os.Getenv("OIDC_AUDIENCE")
+	q.config.MessagingClientID = os.Getenv("MESSAGING_CLIENT_ID")
+	q.config.MessagingClientSecret = os.Getenv("MESSAGING_CLIENT_SECRET")
+	app := fx.New(fx.NopLogger, fx.Supply(q.config, q.queue, outboxLogger()), postgres.Module, auth.Module, fx.Provide(postgres.NewStore, application.NewFinancialService, application.NewAuthorizedIncomingService), workers.ConsumerModule, fx.Populate(&db))
 	if err := app.Start(f.ctx); err != nil {
 		t.Fatal(err)
 	}

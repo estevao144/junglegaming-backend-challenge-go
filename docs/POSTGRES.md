@@ -46,8 +46,9 @@ Migrations 0001/0002 não mudam. Veja [INBOX.md](INBOX.md).
 
 ## Casos de uso disponíveis
 
-`application.FinancialService` é composto por Fx e pode ser injetado nos futuros
-adaptadores. Ainda não há endpoint HTTP financeiro. A API existente expõe health checks.
+`application.FinancialService` é composto por Fx e permanece um caso de uso interno.
+A Parte 6A adiciona wrappers autorizados para HTTP/SQS e uma rota mínima de envio,
+conforme [AUTH.md](AUTH.md). O núcleo transacional e schema não mudam por autenticação.
 
 - `OpenWallet(ctx, playerID, balance, correlationID)`: criação interna, versão 1.
   Zero cria somente a carteira; positivo cria também OPENING, crédito no ledger

@@ -1,4 +1,4 @@
-# Jungle Gaming — Partes 1, 2, 3, 4A, 4B, 5A e 5B
+# Jungle Gaming — Partes 1, 2, 3, 4A, 4B, 5A, 5B e 6A
 
 Base Go + Uber Fx para o desafio abaixo. Esta etapa inclui configuração validada,
 logs JSON, lifecycle do servidor HTTP e PostgreSQL, cliente SQS e health checks.
@@ -10,7 +10,9 @@ SQS FIFO, com claims concorrentes, leases e retry. A Parte 4B consome operaçõe
 SQS com inbox atômica e o mesmo serviço financeiro. A Parte 5A implementa REFUND
 integral e referência pendente durável. A Parte 5B implementa ROLLBACK e worker
 persistente de referências, com backoff, limite de tentativas e recuperação após
-restart. Endpoints de negócio e autenticação ficam para as próximas etapas.
+restart. A Parte 6A integra Keycloak/OIDC real, client_credentials, identidade e
+isolamento por provider, com uma rota mínima autenticada para envio de operações.
+A API HTTP completa e reconciliation ficam para a Parte 6B.
 
 - [Execução local, variáveis e testes](docs/DEVELOPMENT.md)
 - [Decisões e trabalho pendente](ARCHITECTURE.md)
@@ -20,8 +22,9 @@ restart. Endpoints de negócio e autenticação ficam para as próximas etapas.
 - [Consumer, inbox, redelivery e DLQ da Parte 4B](docs/INBOX.md)
 - [REFUND, referências e concorrência da Parte 5A](docs/REFERENCES.md)
 - [ROLLBACK, política de reversões e retry persistente da Parte 5B](docs/REFERENCE_RETRY.md)
+- [Autenticação OAuth2/OIDC, Keycloak e credenciais de mensageria](docs/AUTH.md)
 
-Início rápido: suba `docker compose up -d --wait postgres localstack`, configure
+Início rápido: suba `docker compose up -d --wait postgres localstack keycloak`, configure
 DATABASE_URL e execute `go run ./cmd/migrate up` antes de `docker compose up --build`.
 Veja os comandos completos em [OUTBOX.md](docs/OUTBOX.md). Verifique `GET /health/live` e
 `GET /health/ready` em `http://localhost:8080`.

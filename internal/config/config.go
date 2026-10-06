@@ -16,6 +16,11 @@ import (
 var Module = fx.Module("config", fx.Provide(Load))
 
 type Config struct {
+	OIDCIssuerURL             string
+	OIDCInternalURL           string
+	OIDCAudience              string
+	MessagingClientID         string
+	MessagingClientSecret     string
 	HTTPAddress               string
 	DatabaseURL               string
 	AWSRegion                 string
@@ -183,6 +188,28 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	}
 	if c.ReferenceLease <= time.Duration(c.ReferenceBatchSize)*c.ReferenceProcessTimeout+c.DependencyTimeout {
 		return Config{}, fmt.Errorf("REFERENCE_LEASE must exceed the batch processing and claim budget")
+	}
+	c.OIDCIssuerURL = get("OIDC_ISSUER_URL", "")
+	c.OIDCInternalURL = get("OIDC_INTERNAL_URL", "")
+	c.OIDCAudience = get("OIDC_AUDIENCE", "")
+	c.MessagingClientID = get("MESSAGING_CLIENT_ID", "")
+	c.MessagingClientSecret = get("MESSAGING_CLIENT_SECRET", "")
+	for _, setting := range []struct{ name, value string }{{"OIDC_ISSUER_URL", c.OIDCIssuerURL}, {"OIDC_INTERNAL_URL", c.OIDCInternalURL}} {
+		if setting.name == "OIDC_INTERNAL_URL" && setting.value == "" {
+			continue
+		}
+		u, err := url.Parse(setting.value)
+		if err != nil || u == nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.HasSuffix(setting.value, "/") {
+			return Config{}, fmt.Errorf("%s must be an HTTP(S) URL without credentials, query, fragment or trailing slash", setting.name)
+		}
+		if setting.name == "OIDC_INTERNAL_URL" && u.Path != "" {
+			return Config{}, fmt.Errorf("OIDC_INTERNAL_URL must contain only scheme and host")
+		}
+	}
+	for _, setting := range []struct{ name, value string }{{"OIDC_AUDIENCE", c.OIDCAudience}, {"MESSAGING_CLIENT_ID", c.MessagingClientID}, {"MESSAGING_CLIENT_SECRET", c.MessagingClientSecret}} {
+		if setting.value == "" || strings.TrimSpace(setting.value) != setting.value {
+			return Config{}, fmt.Errorf("%s is required", setting.name)
+		}
 	}
 	return c, nil
 }

@@ -32,13 +32,18 @@ services:
       REFERENCE_RETRY_BASE: ${REFERENCE_RETRY_BASE:-5s}
       REFERENCE_RETRY_MAX: ${REFERENCE_RETRY_MAX:-5m}
       REFERENCE_MAX_ATTEMPTS: ${REFERENCE_MAX_ATTEMPTS:-10}
+      OIDC_ISSUER_URL: http://localhost:8081/realms/jungle
+      OIDC_INTERNAL_URL: http://keycloak:8080
+      OIDC_AUDIENCE: jungle-api
+      MESSAGING_CLIENT_ID: wagering-messaging
+      MESSAGING_CLIENT_SECRET: ${MESSAGING_CLIENT_SECRET:-wagering-messaging-local}
     depends_on:
       postgres:
         condition: service_healthy
       localstack:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health/ready"]
       interval: 10s
@@ -83,10 +88,18 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin-local
       KC_HOSTNAME: http://localhost:8081
+      KC_HEALTH_ENABLED: "true"
     ports:
       - "8081:8080"
     volumes:
       - ./docker/keycloak/jungle-realm.json:/opt/keycloak/data/import/jungle-realm.json:ro
+      - ./docker/keycloak/jungle-other-realm.json:/opt/keycloak/data/import/jungle-other-realm.json:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
 
 volumes:
   postgres-data:

@@ -41,7 +41,7 @@ func NewOperationConsumer(queue OperationQueue, service IncomingService, c confi
 	return &OperationConsumer{queue: queue, service: service, config: c, logger: logger}
 }
 
-func RegisterConsumer(lc fx.Lifecycle, queue *messaging.Queue, service *application.FinancialService, c config.Config, logger *slog.Logger) *OperationConsumer {
+func RegisterConsumer(lc fx.Lifecycle, queue *messaging.Queue, service *application.AuthorizedIncomingService, c config.Config, logger *slog.Logger) *OperationConsumer {
 	consumer := NewOperationConsumer(queue, service, c, logger)
 	lc.Append(fx.Hook{OnStart: func(ctx context.Context) error {
 		check, cancel := context.WithTimeout(ctx, c.DependencyTimeout)

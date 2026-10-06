@@ -1,56 +1,430 @@
 {
-  "realm": "jungle",
-  "enabled": true,
-  "roles": {
-    "realm": [
-      {"name": "provider"},
-      {"name": "wallet-internal"}
-    ]
-  },
-  "clients": [
-    {
-      "clientId": "provider-a",
-      "secret": "provider-a-local",
-      "protocol": "openid-connect",
-      "publicClient": false,
-      "serviceAccountsEnabled": true,
-      "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "protocolMappers": [
-        {
-          "name": "provider-id",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-hardcoded-claim-mapper",
-          "config": {"claim.name": "providerId", "claim.value": "provider-a", "jsonType.label": "String", "access.token.claim": "true"}
-        },
-        {
-          "name": "api-audience",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-audience-mapper",
-          "config": {"included.custom.audience": "jungle-api", "access.token.claim": "true"}
-        }
-      ]
-    },
-    {
-      "clientId": "wallet-internal",
-      "secret": "wallet-internal-local",
-      "protocol": "openid-connect",
-      "publicClient": false,
-      "serviceAccountsEnabled": true,
-      "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "protocolMappers": [
-        {
-          "name": "api-audience",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-audience-mapper",
-          "config": {"included.custom.audience": "jungle-api", "access.token.claim": "true"}
-        }
-      ]
-    }
-  ],
-  "users": [
-    {"username": "service-account-provider-a", "enabled": true, "serviceAccountClientId": "provider-a", "realmRoles": ["provider"]},
-    {"username": "service-account-wallet-internal", "enabled": true, "serviceAccountClientId": "wallet-internal", "realmRoles": ["wallet-internal"]}
-  ]
+    "clients":  [
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "provider-alpha",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "jungle-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-hardcoded-claim-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "provider-identity",
+                                                    "config":  {
+                                                                   "jsonType.label":  "String",
+                                                                   "claim.value":  "provider-alpha",
+                                                                   "claim.name":  "provider_id",
+                                                                   "id.token.claim":  "false",
+                                                                   "access.token.claim":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "provider-alpha-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    },
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "provider-beta",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "jungle-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-hardcoded-claim-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "provider-identity",
+                                                    "config":  {
+                                                                   "jsonType.label":  "String",
+                                                                   "claim.value":  "provider-beta",
+                                                                   "claim.name":  "provider_id",
+                                                                   "id.token.claim":  "false",
+                                                                   "access.token.claim":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "provider-beta-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    },
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "provider-a",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "jungle-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-hardcoded-claim-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "provider-identity",
+                                                    "config":  {
+                                                                   "jsonType.label":  "String",
+                                                                   "claim.value":  "provider-a",
+                                                                   "claim.name":  "provider_id",
+                                                                   "id.token.claim":  "false",
+                                                                   "access.token.claim":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "provider-a-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    },
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "wagering-messaging",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "jungle-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-hardcoded-claim-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "messaging-providers",
+                                                    "config":  {
+                                                                   "jsonType.label":  "JSON",
+                                                                   "claim.value":  "[\"provider-alpha\",\"provider-beta\",\"provider-a\"]",
+                                                                   "claim.name":  "provider_ids",
+                                                                   "id.token.claim":  "false",
+                                                                   "access.token.claim":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "wagering-messaging-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    },
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "wallet-internal",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "jungle-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "wallet-internal-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    },
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "auth-test-missing-provider",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "jungle-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "auth-test-missing-provider-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    },
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "auth-test-no-role",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "jungle-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-hardcoded-claim-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "provider-identity",
+                                                    "config":  {
+                                                                   "jsonType.label":  "String",
+                                                                   "claim.value":  "provider-alpha",
+                                                                   "claim.name":  "provider_id",
+                                                                   "id.token.claim":  "false",
+                                                                   "access.token.claim":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "auth-test-no-role-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    },
+                    {
+                        "directAccessGrantsEnabled":  false,
+                        "clientId":  "auth-test-wrong-audience",
+                        "protocolMappers":  [
+                                                {
+                                                    "protocolMapper":  "oidc-audience-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "api-audience",
+                                                    "config":  {
+                                                                   "access.token.claim":  "true",
+                                                                   "included.custom.audience":  "another-api",
+                                                                   "id.token.claim":  "false"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "realm-roles",
+                                                    "config":  {
+                                                                   "id.token.claim":  "false",
+                                                                   "jsonType.label":  "String",
+                                                                   "access.token.claim":  "true",
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "multivalued":  "true"
+                                                               }
+                                                },
+                                                {
+                                                    "protocolMapper":  "oidc-hardcoded-claim-mapper",
+                                                    "protocol":  "openid-connect",
+                                                    "name":  "provider-identity",
+                                                    "config":  {
+                                                                   "jsonType.label":  "String",
+                                                                   "claim.value":  "provider-alpha",
+                                                                   "claim.name":  "provider_id",
+                                                                   "id.token.claim":  "false",
+                                                                   "access.token.claim":  "true"
+                                                               }
+                                                }
+                                            ],
+                        "fullScopeAllowed":  true,
+                        "secret":  "auth-test-wrong-audience-local",
+                        "serviceAccountsEnabled":  true,
+                        "standardFlowEnabled":  false,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false
+                    }
+                ],
+    "roles":  {
+                  "realm":  [
+                                {
+                                    "name":  "wagering-provider"
+                                },
+                                {
+                                    "name":  "wagering-messaging"
+                                },
+                                {
+                                    "name":  "wallet-internal"
+                                }
+                            ]
+              },
+    "realm":  "jungle",
+    "accessTokenLifespan":  300,
+    "users":  [
+                  {
+                      "username":  "service-account-provider-alpha",
+                      "serviceAccountClientId":  "provider-alpha",
+                      "realmRoles":  [
+                                         "wagering-provider"
+                                     ],
+                      "enabled":  true
+                  },
+                  {
+                      "username":  "service-account-provider-beta",
+                      "serviceAccountClientId":  "provider-beta",
+                      "realmRoles":  [
+                                         "wagering-provider"
+                                     ],
+                      "enabled":  true
+                  },
+                  {
+                      "username":  "service-account-provider-a",
+                      "serviceAccountClientId":  "provider-a",
+                      "realmRoles":  [
+                                         "wagering-provider"
+                                     ],
+                      "enabled":  true
+                  },
+                  {
+                      "username":  "service-account-wagering-messaging",
+                      "serviceAccountClientId":  "wagering-messaging",
+                      "realmRoles":  [
+                                         "wagering-messaging"
+                                     ],
+                      "enabled":  true
+                  },
+                  {
+                      "username":  "service-account-wallet-internal",
+                      "serviceAccountClientId":  "wallet-internal",
+                      "realmRoles":  [
+                                         "wallet-internal"
+                                     ],
+                      "enabled":  true
+                  },
+                  {
+                      "username":  "service-account-auth-test-missing-provider",
+                      "serviceAccountClientId":  "auth-test-missing-provider",
+                      "realmRoles":  [
+                                         "wagering-provider"
+                                     ],
+                      "enabled":  true
+                  },
+                  {
+                      "username":  "service-account-auth-test-no-role",
+                      "serviceAccountClientId":  "auth-test-no-role",
+                      "realmRoles":  [
+
+                                     ],
+                      "enabled":  true
+                  },
+                  {
+                      "username":  "service-account-auth-test-wrong-audience",
+                      "serviceAccountClientId":  "auth-test-wrong-audience",
+                      "realmRoles":  [
+                                         "wagering-provider"
+                                     ],
+                      "enabled":  true
+                  }
+              ],
+    "enabled":  true
 }

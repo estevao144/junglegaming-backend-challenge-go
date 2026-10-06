@@ -8,6 +8,12 @@ import (
 func TestLoad(t *testing.T) {
 	for _, test := range []struct{ name, key, value, wantError string }{
 		{name: "defaults"},
+		{name: "missing issuer", key: "OIDC_ISSUER_URL", value: "", wantError: "OIDC_ISSUER_URL"},
+		{name: "invalid issuer", key: "OIDC_ISSUER_URL", value: "http://user:secret@localhost/realm", wantError: "OIDC_ISSUER_URL"},
+		{name: "internal URL path", key: "OIDC_INTERNAL_URL", value: "http://keycloak:8080/path", wantError: "OIDC_INTERNAL_URL"},
+		{name: "missing audience", key: "OIDC_AUDIENCE", value: "", wantError: "OIDC_AUDIENCE"},
+		{name: "missing messaging ID", key: "MESSAGING_CLIENT_ID", value: "", wantError: "MESSAGING_CLIENT_ID"},
+		{name: "missing messaging secret", key: "MESSAGING_CLIENT_SECRET", value: "", wantError: "MESSAGING_CLIENT_SECRET"},
 		{name: "reference attempts zero", key: "REFERENCE_MAX_ATTEMPTS", value: "0", wantError: "REFERENCE_MAX_ATTEMPTS"},
 		{name: "reference batch zero", key: "REFERENCE_BATCH_SIZE", value: "0", wantError: "REFERENCE_BATCH_SIZE"},
 		{name: "reference unsafe lease", key: "REFERENCE_LEASE", value: "1s", wantError: "REFERENCE_LEASE"},
@@ -40,7 +46,7 @@ func TestLoad(t *testing.T) {
 		{name: "invalid process timeout", key: "SQS_PROCESS_TIMEOUT", value: "0s", wantError: "SQS_PROCESS_TIMEOUT"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			values := map[string]string{"DATABASE_URL": "postgres://user:secret@localhost:5432/jungle"}
+			values := map[string]string{"DATABASE_URL": "postgres://user:secret@localhost:5432/jungle", "OIDC_ISSUER_URL": "http://localhost:8081/realms/jungle", "OIDC_AUDIENCE": "jungle-api", "MESSAGING_CLIENT_ID": "wagering-messaging", "MESSAGING_CLIENT_SECRET": "local-only"}
 			if test.key != "" {
 				values[test.key] = test.value
 			}

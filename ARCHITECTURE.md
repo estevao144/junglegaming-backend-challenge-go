@@ -1,4 +1,4 @@
-# Arquitetura — Partes 1, 2, 3, 4A, 4B, 5A e 5B
+# Arquitetura — Partes 1, 2, 3, 4A, 4B, 5A, 5B e 6A
 
 Esta entrega estrutura o serviço e implementa as invariantes locais do núcleo
 financeiro. A Parte 3 implementa persistência financeira, processamento síncrono,
@@ -122,19 +122,35 @@ uso continuam responsáveis por criar os eventos na mesma transação. A soma do
 ledger é comparada ao saldo nos testes. Controle de acesso ao banco e reconciliação
 operacional serão complementados nas etapas futuras.
 
-## Decisões previstas para as próximas etapas
+## Autenticação e autorização da Parte 6A
 
-Estas escolhas orientam a estrutura; sua implementação e comprovação ainda estão pendentes.
+Keycloak real importa realm jungle e service accounts pelo Compose, com healthcheck
+antes do startup da API. Providers usam client_credentials e role wagering-provider.
+go-oidc verifica assinatura RS256 via JWKS, issuer, audience e expiração; a aplicação
+exige sub/azp/typ, respeita nbf e extrai provider_id assinado para Principal no contexto.
+RemoteKeySet cacheia chaves e atualiza quando necessário para rotação. Nenhuma chave
+pública, token ou secret é hardcoded no código Go.
 
-- Autenticação: Keycloak externo, OIDC e `client_credentials`; validação de assinatura,
-  issuer, audience e expiração antes de expor rotas financeiras. `providerId` virá da
-  identidade validada; operações de carteira exigirão role interna. Sem emissão própria de tokens.
+POST /wagering/transactions é a única rota financeira acrescentada para validar
+autorização; health continua público. Middleware autentica; AuthorizedFinancialService
+autoriza o provider antes do caso de uso interno. Leituras do wrapper filtram provider.
+Operações internas de carteira continuam sem rota pública; wallet-internal é a role
+reservada para sua exposição futura. O domínio não depende de JWT/OIDC/Fx.
+
+SQS mantém AWS/SigV4 e policies mínimas versionadas para produtor e consumer/publisher.
+O consumer usa adicionalmente wagering-messaging, autenticado no IdP, com role própria
+e allowlist de providers no token; cache/renovação não alteram hash financeiro ou inbox.
+O README exige credenciais/políticas do broker, sem impor JWT no payload. LocalStack
+Community não demonstra enforcement IAM: policies precisam ser aplicadas em AWS ou
+ambiente com esse recurso. A autorização OIDC do serviço é efetivamente validada localmente.
+Decisões, fronteiras de confiança e testes estão em [AUTH.md](docs/AUTH.md).
 
 ## Limitações e trabalho pendente
 
-Somente os health checks públicos estão registrados. Não há autenticação efetiva
-na API porque ainda não existem endpoints de negócio. O provisionamento Keycloak
-prepara identidades locais, mas não comprova validação de tokens ou isolamento.
+Health checks públicos e uma rota de envio de operações protegida por OIDC estão
+registrados. Tokens reais de providers distintos, isolamento e assinatura inválida
+são testados com Keycloak. A API final de consultas/carteiras/reconciliation não
+faz parte desta etapa.
 
 As entidades, schema, repositories e casos de uso desta etapa estão implementados.
 WIN com referência ainda retorna ErrUnsupportedOperation.
@@ -143,8 +159,8 @@ com ID interno persistido, lock da carteira e índice único contra dupla devolu
 Referência ausente gera PENDING_REFERENCE durável, sem movimento. Replay não
 resolve a pendência; ReferenceWorker faz isso separadamente. Detalhes em
 [REFERENCES.md](docs/REFERENCES.md) e [REFERENCE_RETRY.md](docs/REFERENCE_RETRY.md).
-Faltam rotas financeiras, autenticação/autorização efetiva, reconciliação com cursor,
-métricas e controles de broker. Publisher, consumer e ReferenceWorker estão
+Faltam a API HTTP completa, reconciliação com cursor, métricas e comprovação de
+enforcement IAM no broker local. Publisher, consumer e ReferenceWorker estão
 implementados e testados. Inbox usa chave consumer/QueueArn/messageId do envelope
 e hash de corpo separado do hash financeiro. FinancialService compartilha seu
 fluxo interno entre Process e ProcessIncoming; savepoint permite registrar erro

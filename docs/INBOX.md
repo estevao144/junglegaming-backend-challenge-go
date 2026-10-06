@@ -1,5 +1,9 @@
 # Consumer SQS e transactional inbox — Parte 4B
 
+A Parte 6A adiciona a autenticação OIDC da service account do consumer e autorização
+do provider antes de ProcessIncoming: [AUTH.md](AUTH.md). Contrato, hash, atomicidade
+da inbox e acknowledgment continuam preservados.
+
 Entrada: `wager-transactions.fifo`; saída: `wager-events.fifo`. O script LocalStack
 já provisiona a entrada, `wager-transactions-dlq.fifo` e RedrivePolicy com
 `maxReceiveCount=5`. O consumer não envia mensagens manualmente à DLQ.
